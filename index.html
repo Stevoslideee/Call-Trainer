@@ -673,7 +673,7 @@ function stopMic(cancel){ if(typeof wRec !== "undefined" && wRec){ wFinish(!!can
 /* ---------- Built-in speech-to-text (Whisper in the browser) — used on iPhone and wherever the browser's own mic is unreliable ---------- */
 const TFJ = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/transformers.min.js";
 let asrP = null, wCtx = null, wStream = null, wNode = null, wSrc = null, wRec = null, wForce = false;
-let asrFailed = false, asrReady = false, wStarting = false; function useWhisperMic(){ return !asrFailed || !SR; }
+let asrFailed = false, asrReady = false, wStarting = false, wEmpty = 0; function useWhisperMic(){ return !asrFailed || !SR; }
 function loadASR(onProg){
   return asrP || (asrP = (async()=>{
     const T = await import(TFJ);
@@ -732,7 +732,7 @@ async function wStart(){
   try{ await ready; asrReady = true; }catch(e){ wStarting = false; wRelease(); wSetUI("idle"); if(SR && !IOS){ asrFailed = true; micMsg("Built-in speech recognition couldn't load, so the browser's voice input is used instead. Tap Talk again."); } else micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type."); return; }
   wStarting = false;
   if($("input").disabled || status !== "live" || !wStream){ wRelease(); wSetUI("idle"); return; }
-  const chunks = [], rate = wCtx.sampleRate; let heard = false, lastLoud = 0, noise = -1, frames = 0, speechStart = 0; const t0 = performance.now();
+  const chunks = [], rate = wCtx.sampleRate; let heard = false, lastLoud = 0, noise = -1, frames = 0, speechStart = 0, ring = [], loud = 0, maxRms = 0; const t0 = performance.now();
   wSrc = wCtx.createMediaStreamSource(wStream);
   wNode = wCtx.createScriptProcessor(4096, 1, 1);
   wNode.onaudioprocess = ev => {
@@ -740,23 +740,25 @@ async function wStart(){
     const d = ev.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d));
     let s = 0; for(let i = 0; i < d.length; i += 4) s += d[i] * d[i]; const rms = Math.sqrt(s / (d.length / 4));
     const now = performance.now(); const lv = $("micLevel"); if(lv) lv.firstChild.style.width = Math.min(100, Math.round(rms * 900)) + "%";
-    frames++; if(frames <= 3) noise = noise < 0 ? rms : Math.min(noise, rms);
-    const thr = Math.max(0.012, noise * 2.2 + 0.004);
-    if(frames > 3 && rms > thr){ if(!heard) speechStart = now; heard = true; lastLoud = now; }
-    else if(frames > 3 && rms <= thr) noise = noise * 0.92 + rms * 0.08;
+    frames++; ring.push(rms); if(ring.length > 30) ring.shift();
+    if(frames <= 3) noise = noise < 0 ? rms : Math.min(noise, rms); else noise = Math.min.apply(null, ring);
+    const thr = Math.max(0.01, noise * 2.5 + 0.003);
+    if(rms > maxRms) maxRms = rms;
+    if(frames > 3 && rms > thr){ loud++; lastLoud = now; if(!heard && loud >= 4){ heard = true; speechStart = now; } }
+    else if(!heard && now - lastLoud > 500) loud = 0;
     if($("handsFree").checked && heard && now - lastLoud > 1600) wFinish();
-    else if(!heard && now - t0 > 9000) wFinish();
+    else if(!heard && now - t0 > 20000) wFinish();
     else if(heard && now - speechStart > 25000) wFinish();
     else if(now - t0 > 32000) wFinish();
   };
   wSrc.connect(wNode); wNode.connect(wCtx.destination);
-  wRec = { chunks, rate, get heard(){ return heard; } };
+  wRec = { chunks, rate, get heard(){ return heard; }, get maxRms(){ return maxRms; } };
   wSetUI("rec"); micMsg($("handsFree").checked ? "Listening… say your line, then pause. (Or tap Talk when you're done.)" : "Listening… tap Talk when you're done.");
 }
 async function wFinish(cancel){
   const r = wRec; if(!r) return; wRec = null; wRelease();
   if(cancel){ wSetUI("idle"); return; }
-  if(!r.heard){ wSetUI("idle"); micMsg("No sound came through your microphone. Check that your computer or phone is using the right mic (and it isn't muted), then tap Talk."); return; }
+  if(!r.heard){ wSetUI("idle"); if(r.maxRms > 0.006){ micMsg("Tap Talk when you're ready to answer."); return; } micMsg("No sound came through your microphone. Check that your computer or phone is using the right mic (and it isn't muted), then tap Talk."); return; }
   wSetUI("busy"); micMsg("Turning your words into text…");
   try{
     const asr = await loadASR(p => micMsg(`Loading speech recognition: ${p}% (one-time download)`));
@@ -764,7 +766,8 @@ async function wFinish(cancel){
     const out = await asr(await to16k(r.chunks, r.rate)); clearTimeout(slow);
     const text = fixTerms(String(out && out.text || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\s+/g, " ").trim());
     wSetUI("idle");
-    if(!text){ micMsg("Didn't catch that. Tap Talk and try again."); return; }
+    if(!text){ if($("handsFree").checked && (wEmpty = wEmpty + 1) <= 2){ micMsg("Didn't catch that. Listening again…"); setTimeout(()=>{ if(status === "live" && !$("input").disabled) wStart(); }, 250); } else { wEmpty = 0; micMsg("Didn't catch that. Tap Talk and try again."); } return; }
+    wEmpty = 0;
     micMsg("");
     const cur = $("input").value.trim(); $("input").value = cur ? cur + " " + text : text;
     if($("handsFree").checked && !$("input").disabled){ lastFromMic = true; send(); }
@@ -778,7 +781,7 @@ function toggleMic(){
   if(listening){ stopMic(false); if(!$("handsFree").checked){ /* manual mode: leave text for review */ } }
   else { lastFromMic = true; startMic(); }
 }
-function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled){ if(useWhisperMic()) wStart(); else startMic(); } }
+function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled){ if(useWhisperMic()) setTimeout(()=>{ if(status === "live" && !$("input").disabled) wStart(); }, 400); else startMic(); } }
 $("micBtn").onclick = ()=>{ unlockTTS(); toggleMic(); };
 try{ const nv = localStorage.getItem("ct_natural"); if(nv !== null) $("natural").checked = nv === "1"; }catch(e){}
 $("deviceVoiceRow").hidden = $("natural").checked;
