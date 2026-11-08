@@ -838,9 +838,19 @@ async function to16k(chunks, inRate){
   if(peak > 0.002 && peak < 0.5){ const g = Math.min(30, 0.7 / peak); for(let i = 0; i < out.length; i++) out[i] *= g; }
   return out;
 }
+// Cut the silence before and after the line: the speech model often returns nothing when a line starts after a long pause.
+function trimSpeech(x){
+  const F = 320, n = Math.floor(x.length / F); if(n < 10) return x;
+  const e = new Float32Array(n); for(let i = 0; i < n; i++){ let s = 0; for(let k = i*F; k < (i+1)*F; k++) s += x[k]*x[k]; e[i] = Math.sqrt(s / F); }
+  const sorted = Array.from(e).sort((a,b)=>a-b), floor = sorted[Math.floor(n*0.1)], peak = sorted[Math.floor(n*0.98)];
+  const thr = Math.max(floor * 3, floor + (peak - floor) * 0.12);
+  let a = -1, b = -1; for(let i = 0; i < n; i++) if(e[i] > thr){ if(a < 0) a = i; b = i; }
+  if(a < 0) return x;
+  return x.subarray(Math.max(0, (a - 20) * F), Math.min(x.length, (b + 30) * F));
+}
 function fixTerms(t){
   return t
-    .replace(/\b(re[\s:\-]?invent|reinvents?|re-?event|recollen and bent|rian vent|ree invent)\b/gi, "re:Invent")
+    .replace(/\b(re[\s:\-]?invent|reinvents?|re-?event|recollen and bent|recoll?[eo]n,? invent|rian vent|ree invent)\b/gi, "re:Invent")
     .replace(/\b(a ?strap|ab ?stract|ab ?strat|abstrakt|abstract)\b(?=\s+(on|calling|here|with|and|we|team|is)\b|[,.]|$)/gi, "Abstrakt")
     .replace(/\bfrom (a ?strap|ab ?stract|abstract|ab ?strat)\b/gi, "from Abstrakt")
     .replace(/\bopen[\s\-]?a\.?\s?i\.?\b/gi, "OpenAI")
@@ -918,7 +928,10 @@ async function wFinish(cancel){
   try{
     const asr = await loadASR(p => micMsg(`Loading speech recognition: ${p}% (one-time download)`));
     const slow = setTimeout(()=>micMsg("Still working… the first time can take a little longer."), 8000);
-    const out = await asr(await to16k(r.chunks, r.rate)); clearTimeout(slow);
+    const full = await to16k(r.chunks, r.rate), cut = trimSpeech(full);
+    let out = await asr(cut);
+    if(!String(out && out.text || "").trim() && cut !== full) out = await asr(full);
+    clearTimeout(slow);
     let text = fixTerms(String(out && out.text || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\s+/g, " ").trim());
     wSetUI("idle");
     if(!text || (text.split(" ").length < 3 && backup().split(" ").length > text.split(" ").length + 2)) text = backup() || text;
