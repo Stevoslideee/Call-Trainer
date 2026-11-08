@@ -132,6 +132,28 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
 @media (prefers-reduced-motion:no-preference){.btn.mic[aria-pressed="true"]{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--bad) 25%,transparent)}}}
 @media (max-width:420px){.compose{flex-wrap:wrap}.compose textarea{flex-basis:100%}.compose .btn{flex:1;justify-content:center}}
 .persona .vtag{font:500 11px/1.3 var(--f-mono);color:var(--muted);margin-top:2px}
+.seg{flex-wrap:wrap}
+.persona.surprise{border-style:dashed;justify-content:center}
+.persona.surprise b{color:var(--teal)}
+.progress{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.prog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.prog-k{font-size:12px;color:var(--muted);margin-bottom:4px}
+.prog-v{font:800 28px/1 var(--f-display);color:var(--teal);font-variant-numeric:tabular-nums}
+.prog-sub{font-size:13.5px;line-height:1.5}
+.spark{display:flex;align-items:flex-end;gap:3px;height:34px;margin-bottom:4px}
+.spark i{display:block;width:10px;border-radius:2px 2px 0 0;background:var(--teal);opacity:.85}
+.callmeta{display:inline-flex;align-items:center;gap:8px}
+.timer{font:500 12px/1 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.rail li.half .dot{border-color:var(--warn);color:var(--warn)}
+.rail li.off{opacity:.45}
+.mini{display:none;padding:10px 14px;border-top:1px solid var(--line);background:var(--tint);font-size:14px}
+.mini i{font-style:normal;font-weight:600;color:var(--teal)}
+@media (max-width:760px){.mini:not([hidden]){display:block;max-height:30vh;overflow:auto;white-space:pre-wrap}.log{max-height:46vh;min-height:240px}}
+.review{border-top:1px solid var(--line);padding-top:12px}
+.rv{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.rv-text{color:var(--ink)}
+.chip{display:inline-block;font:500 11px/1 var(--f-mono);padding:4px 7px;border-radius:999px;background:var(--tint);color:var(--teal);margin-left:4px;letter-spacing:.04em}
+.chip.miss{color:var(--muted);background:var(--bg);border:1px dashed var(--line)}
 </style>
 </head>
 <body>
@@ -152,6 +174,7 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
   <section class="setup" id="setup" aria-label="Call setup">
     <div class="eyebrow">Pick who you're calling</div>
     <div class="personas" id="personas"></div>
+    <div class="progress" id="progress" hidden></div>
     <div class="row">
       <div>
         <div class="eyebrow" style="margin-bottom:6px">Difficulty</div>
@@ -159,10 +182,18 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
           <button data-v="easy" aria-pressed="false">Warm</button><button data-v="normal" aria-pressed="true">Normal</button><button data-v="tough" aria-pressed="false">Tough</button>
         </div>
       </div>
+      <div>
+        <div class="eyebrow" style="margin-bottom:6px">Practice</div>
+        <div class="seg" id="mode"><button data-v="full" aria-pressed="true">Full call</button><button data-v="drill" aria-pressed="false">Drill one step</button></div>
+      </div>
+      <div id="drillWrap" hidden>
+        <div class="eyebrow" style="margin-bottom:6px">Step to drill</div>
+        <div class="seg" id="drillStep"><button data-v="issues" aria-pressed="true">2 Bottlenecks</button><button data-v="creed" aria-pressed="false">3 Creed</button><button data-v="capabilities" aria-pressed="false">4 Rundown</button><button data-v="recommendation" aria-pressed="false">5 Meeting</button><button data-v="close" aria-pressed="false">6–7 Schedule + Confirm</button></div>
+      </div>
       <label class="chk"><input type="checkbox" id="hideScript"> Hide script lines (practice from memory)</label>
       <label class="chk"><input type="checkbox" id="voice" checked> Prospects talk out loud <span style="color:var(--muted);font-size:12px">(iPhone: turn off silent mode and turn up the volume)</span></label>
-      <label class="chk"><input type="checkbox" id="natural" checked> Natural AI voices (free, same on every device; the first call with each prospect downloads about 80 MB)</label>
-      <div class="row" id="deviceVoiceRow" style="gap:8px;align-items:flex-end"><label class="f" style="min-width:220px">Device voice for this prospect (★ = natural-sounding)<select id="voicePick" style="border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:7px 9px;font-size:14px;color:var(--ink)"></select></label><button class="btn" id="voiceTest" type="button">Preview</button></div>
+      <input type="checkbox" id="natural" checked hidden>
+      <div id="deviceVoiceRow" hidden><select id="voicePick" aria-label="Device voice"></select><button id="voiceTest" type="button">Preview</button></div>
       <label class="chk" id="handsFreeWrap"><input type="checkbox" id="handsFree" checked> Hands-free mic (sends when you pause, then listens again)</label>
     </div>
     <details class="fields">
@@ -191,9 +222,10 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
     <section class="card call" aria-label="Live call">
       <div class="callbar">
         <div class="who" id="who"><b>No call yet</b><div>Pick a prospect and press Start call.</div></div>
-        <span class="status" id="status">Idle</span>
+        <span class="callmeta"><span class="timer" id="timer" hidden>0:00</span><span class="status" id="status">Idle</span></span>
       </div>
       <div class="log" id="log" aria-live="polite"></div>
+      <div class="mini" id="mini" hidden><div class="eyebrow">Next: <span id="miniTitle"></span></div><div id="miniLine"></div></div>
       <div class="compose">
         <textarea id="input" placeholder="Say your line…" disabled></textarea>
         <button class="btn mic" id="micBtn" type="button" aria-pressed="false" aria-label="Speak your line" title="Speak your line" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="micLbl">Talk</span></button>
@@ -201,7 +233,7 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
       </div>
       <div class="hint" id="micMsg" role="status" hidden></div>
       <div id="micLevel" hidden style="margin:0 14px 10px;height:6px;border-radius:3px;background:var(--line);overflow:hidden"><i style="display:block;height:100%;width:0%;background:var(--good);transition:width .08s"></i></div>
-      <div class="hint">Tap Talk or press Ctrl+M to speak · Enter sends · Shift+Enter for a new line · Prospects are scripted, so stick close to the route wording</div>
+      <div class="hint" id="hint"></div>
     </section>
 
     <aside class="side">
@@ -246,7 +278,7 @@ const PERSONAS = [
     cap:["The finding-information part is exactly our problem.","Helping people find information, that's the one that jumps out for us."],
     email:["Sure, it's dana.whitfield@crestlinefreight.com."],
     curious:["Probably the search side, getting answers out of all those emails and PDFs."],
-    objection:["Hmm, I'm not sure I'll have time at re:Invent. The schedule's already packed.","What would that meeting actually look like?"],
+    objection:["Hmm, I'm not sure I'll have time at re:Invent. The schedule's already packed.","What would that meeting actually look like?","Could you just send me something to read first?"],
     agree:["Yeah, I could fit that in. When are they around?","Sure, that sounds useful. What times do they have?"],
     generic:["Sorry, what do you mean?","Hm, can you say that a different way?"],
     hangup:["I'm sorry, I've got to jump on something. Just send me an email."],
@@ -268,7 +300,7 @@ const PERSONAS = [
     cap:["The repetitive work piece. That's where we bleed time.","Cutting the repetitive stuff, maybe. The rest I'm not sure about."],
     email:["mreyes@hollisprecision.com."],
     curious:["The repetitive-work side. If it can take reports off my supervisors' plates."],
-    objection:["We already have an AI tool. I don't see why I'd need another meeting.","I've sat through these before. What makes this different?"],
+    objection:["We already have an AI tool. I don't see why I'd need another meeting.","I've sat through these before. What makes this different?","My time at re:Invent is spoken for. Convince me."],
     agree:["Fine. If it's about the shift reports, I'll take twenty minutes.","Alright, I'll hear them out. When?"],
     generic:["Not following you.","Get to the point."],
     hangup:["Look, I've got to go. Send me an email."],
@@ -290,7 +322,7 @@ const PERSONAS = [
     cap:["Building AI into the product. That's the one I care about.","The product piece is the relevant part for us."],
     email:["priya@ledgerly.io."],
     curious:["How other SaaS companies are building AI features without risking customer data."],
-    objection:["Can you just email me the details?","I'm swamped that week. Is this really worth the time?"],
+    objection:["Can you just email me the details?","I'm swamped that week. Is this really worth the time?","How long is it? I can't do an hour."],
     agree:["Okay, if they can talk product and privacy, I'm in. What do they have?","Fine, that's actually relevant. When?"],
     generic:["Sorry, I'm short on time. What's the ask?","I didn't catch that."],
     hangup:["I have to run into a meeting. Email me."],
@@ -312,11 +344,55 @@ const PERSONAS = [
     cap:["Interesting. Helping our member-service team find information faster might matter.","The information piece is interesting, as long as it's compliant."],
     email:["It's tbecker@prairiestatecu.org."],
     curious:["What other credit unions are actually doing with it."],
-    objection:["I'm not sure I need a meeting if nothing's broken.","We're pretty happy with things. What would we even talk about?"],
+    objection:["I'm not sure I need a meeting if nothing's broken.","We're pretty happy with things. What would we even talk about?","I'd have to check with compliance first."],
     agree:["Sure, a general overview would be helpful. When are they available?","Okay, I'd be open to that. What times work?"],
     generic:["I'm sorry, I'm not sure what you mean.","Could you clarify that?"],
     hangup:["I should get back to work. Feel free to send an email."],
     bye:["Sounds good. I'll accept it when it arrives. Thank you."]
+   }},
+  {id:"jordan", tag:"Overloaded", name:"Jordan Ellis", title:"Head of Customer Support", company:"Brightpath Health (patient scheduling software)",
+   blurb:"", pref:"afternoon", dayPick:0, noIssue:false,
+   issueKw:["ticket","support","backlog","same question","repetitive","answer","response time","queue","agents"],
+   card:{aiUse:"Tried a basic chatbot on the help site; customers hated it.", issue:"Support agents answer the same scheduling questions all day and the ticket backlog keeps growing.", looked:"Demos from two help-desk vendors with AI add-ons.", pref:"Afternoons"},
+   lines:{
+    pickup:["Brightpath support, this is Jordan.","Jordan Ellis, how can I help?"],
+    introOnly:["Okay, what's this about?","Sure, I've got a minute."],
+    aiUse:["We tried a chatbot on our help site. Honestly, customers hated it, so we turned it off.","Not much right now. We had a chatbot for a while but it caused more tickets than it solved."],
+    issue:["Volume. My agents answer the same scheduling questions all day, and the ticket backlog just keeps growing.","Response times. We're buried in repetitive tickets, and good agents are burning out on them."],
+    deflect:["Why do you ask?","Depends what you're selling."],
+    ack:["Yeah, that's exactly it.","Right. It's a grind."],
+    creed:["Okay, that's helpful.","Got it."],
+    looked:["We sat through demos from two help-desk vendors with AI add-ons. Nothing stuck.","A couple of vendor demos. They all promised a lot."],
+    cap:["Cutting the repetitive work is the big one for us.","Helping agents find answers faster would matter a lot."],
+    email:["It's jordan.ellis@brightpathhealth.com."],
+    curious:["How to take the repetitive tickets off my team without annoying customers."],
+    objection:["I've been burned by AI promises before. Why would this be different?","Honestly, I'm not sure I have time at re:Invent.","Can't you just send me a deck?"],
+    agree:["Alright, if they can talk about support specifically, I'm in.","Okay, that's worth a conversation. When?"],
+    generic:["Sorry, I lost you there.","What do you mean?"],
+    hangup:["I've got a queue to deal with. Send me an email."],
+    bye:["Sounds good. I'll accept it when it comes in."]
+   }},
+  {id:"rachel", tag:"Creative", name:"Rachel Kim", title:"Marketing Director", company:"Summit Outdoor Co. (outdoor gear retail)",
+   blurb:"", pref:"morning", dayPick:1, noIssue:false,
+   issueKw:["product description","descriptions","copy","content","writing","campaign","catalog","season"],
+   card:{aiUse:"Her team uses ChatGPT for first drafts, but brand voice is inconsistent.", issue:"Writing hundreds of product descriptions and campaign emails every season.", looked:"A copywriting AI tool trial; the output sounded generic.", pref:"Mornings"},
+   lines:{
+    pickup:["Hi, Rachel Kim speaking.","This is Rachel."],
+    introOnly:["Oh, interesting. Go ahead.","Okay, what's up?"],
+    aiUse:["My team uses ChatGPT for first drafts, but it never sounds like our brand.","We play with ChatGPT for copy ideas. Nothing official."],
+    issue:["Content volume. Every season we write hundreds of product descriptions and campaign emails, and it's brutal.","Honestly, keeping up with copy. Product descriptions alone take my team weeks every launch."],
+    deflect:["Hm, what kind of challenges?","Why, what are you offering?"],
+    ack:["Yes! That's the one.","Exactly. Thank you."],
+    creed:["Oh, fun. Okay.","Makes sense."],
+    looked:["We trialed a copywriting AI tool, but everything it wrote sounded generic.","A couple of AI writing tools. None nailed our voice."],
+    cap:["Reducing the repetitive writing, for sure.","Building AI into how we make content, that's the interesting part."],
+    email:["Sure, it's rachel.kim@summitoutdoor.com."],
+    curious:["Getting AI to write in our brand voice at scale."],
+    objection:["re:Invent week is packed for me. Is it worth a slot?","What would I actually get out of the meeting?"],
+    agree:["Okay, if it's about content at scale, count me in.","Sure, let's do it. What times work?"],
+    generic:["Sorry, can you say that again?","I'm not sure I follow."],
+    hangup:["I need to jump into a shoot. Email me."],
+    bye:["Perfect, see you there. I'll accept the invite."]
    }}
 ];
 
@@ -341,6 +417,12 @@ const GOALS = {
   confirm:"Confirm day, time, time zone, location and email, and ask them to accept the invitation."
 };
 
+const STEP_REQ = { approach:["approach"], issues:["issues","acknowledge"], creed:["creed"], capabilities:["capabilities","email"], recommendation:["recommendation"], close:["close"], confirm:["confirm"] };
+const DRILL_STEPS = { issues:["issues"], creed:["creed"], capabilities:["capabilities"], recommendation:["recommendation"], close:["close","confirm"] };
+function stepTurn(id){ if(!st) return null; let m = -1; for(const r of STEP_REQ[id]){ if(st.hits[r] == null) return null; m = Math.max(m, st.hits[r]); } return m; }
+function stepDone(id){ return stepTurn(id) != null; }
+function stepPartial(id){ return !!st && !stepDone(id) && STEP_REQ[id].some(r => st.hits[r] != null); }
+function scopeSteps(){ return st && st.drill ? DRILL_STEPS[st.drill] : ROUTE.map(r => r.id); }
 const $ = id => document.getElementById(id);
 const F = () => ({name:$("f_name").value||"[NAME]", client:$("f_client").value||"[APPROVED CLIENT NAME]", team:$("f_team").value||"[MEETING TEAM]",
   day1:$("f_day1").value||"[DAY ONE]", day2:$("f_day2").value||"[DAY TWO]", t1:$("f_t1").value||"[TIME ONE]", t2:$("f_t2").value||"[TIME TWO]",
@@ -362,6 +444,8 @@ function scriptFor(id, p){
     recommendation:[["Issue or clear interest",`"Okay, so I am going to get you some general information — but since you mentioned ${v("[issue or interest]")}, I'd recommend getting you connected with ${v(f.team)} while you're at re:Invent so they can explore that with you."`],["General information only",`"Okay, so I am going to get you some general information. I'd also recommend getting you connected with ${v(f.team)} while you're at re:Invent so you can get a clearer picture of what's available and what might be useful for your business."`]],
     close:[["Schedule",`"They have time available ${v(f.day1)} and ${v(f.day2)}. Do mornings or afternoons work better for you?"\n\n"I have ${v(f.t1)} or ${v(f.t2)}. Which works better?"`],["Confirm",`"Perfect. I've got you down for ${v(st&&st.day?st.day:"[day]")} at ${v(st&&st.time?st.time:"[time]")} ${v(f.tz)}, at ${v(f.loc)}. I'll send the invitation to ${v(st&&st.email&&persona?persona.lines.email[0].match(/[\w.]+@[\w.]+\w/)[0]:"[confirmed email]")}.\n\nPlease accept the invitation when it comes through so the team knows you received it. We look forward to meeting you at re:Invent."`]]
   };
+  if(id === "issues" && st && st.hits.issues != null) return S.acknowledge;
+  if(id === "capabilities" && st && st.hits.capabilities != null) return S.email;
   S.issues = S.issues.concat(S.acknowledge); S.capabilities = S.capabilities.concat(S.email); S.confirm = [S.close[1]]; S.close = [S.close[0]];
   return S[id];
 }
@@ -413,7 +497,7 @@ function newState(){
     objections: {easy:0, normal:1, tough:2}[difficulty], patience: {easy:99, normal:7, tough:3}[difficulty],
     day:null, ampm:null, time:null, booked:false, ended:false, lastWas:"pickup",
     hits:{}, repTurn:0, intro:{abstrakt:false, recorded:false, client:false, reinvent:false},
-    recSpecific:null, recBeforeIssue:false, offeredChoice:false, confirmDetails:null, offRoute:0, longTurns:0, coach:"" };
+    recSpecific:null, recBeforeIssue:false, offeredChoice:false, confirmDetails:null, offRoute:0, longTurns:0, coach:"", drill:null, review:[], startAt:Date.now(), endAt:0 };
 }
 
 function hit(id){ if(!(id in st.hits)) st.hits[id] = st.repTurn; }
@@ -523,61 +607,95 @@ function prospectReply(text){
 /* ---------- Scoring ---------- */
 function scoreCall(){
   const items = [], h = st.hits, I = st.intro;
-  const add = (label, pts, max, note) => items.push({label, pts, max, note});
-  const introPts = (I.abstrakt?3:0) + (I.recorded?4:0) + (I.client?3:0);
-  const miss = [!I.abstrakt&&"Abstrakt", !I.recorded&&"recorded line", !I.client&&"client name"].filter(Boolean);
-  add("Introduction", introPts, 10, miss.length ? `Missing: ${miss.join(", ")}.` : "Abstrakt, recorded line and client all named.");
-  add("Current approach", h.approach!=null?10:0, 10, h.approach!=null ? "Asked how they use AI today." : "Never asked how they currently use AI.");
-  add("Issues", h.issues!=null?10:0, 10, h.issues!=null ? "Asked about bottlenecks or challenges." : "Never asked about challenges.");
-  add("Acknowledge", h.acknowledge!=null?10:0, 10, h.acknowledge!=null ? "Acknowledged what they shared." : "Didn't restate or acknowledge their answer.");
-  add("Creed", (h.creed!=null?8:0) + (st.looked?4:0), 12, h.creed!=null ? (st.looked ? "Explained the meetings and asked about resources." : "Explained the meetings but skipped \"what resources have you looked into?\"") : "Didn't explain why you're reaching out.");
-  add("Capabilities", h.capabilities!=null?10:0, 10, h.capabilities!=null ? "Gave the rundown." : "Skipped the rundown of the three value areas.");
-  add("Email + interest", (st.email&&h.email!=null?6:0) + (st.curious?4:0), 10, [!st.email&&"never asked for an email", !st.curious&&"didn't ask what they're most curious about"].filter(Boolean).join("; ").replace(/^./,c=>c.toUpperCase()) || "Got the email and their main interest.");
-  add("Recommendation", h.recommendation!=null ? (st.recSpecific ? 10 : 7) : 0, 10, h.recommendation==null ? "Never recommended the re:Invent meeting." : st.recSpecific ? "Tied the meeting to what they shared." : "Recommended it, but didn't tie it to their issue.");
-  const cd = st.confirmDetails;
-  const closePts = (st.offeredChoice?6:0) + (cd ? 2 + ["tz","loc","email","accept"].filter(k=>cd[k]).length : 0);
-  add("Close", closePts, 12, !st.offeredChoice && !cd ? "Didn't get to scheduling." : [st.offeredChoice?"Offered choices.":"Offer two options instead of one.", cd ? (["tz","loc","email","accept"].filter(k=>!cd[k]).map(k=>({tz:"time zone",loc:"location",email:"email",accept:"ask them to accept the invite"}[k])).join(", ").replace(/^(.)/,"Confirm missed: $1") || "Full confirmation.") : "Never confirmed the booking."].join(" "));
-  add("Booked", st.booked?6:0, 6, st.booked ? "Meeting on the calendar." : "No meeting booked.");
+  const add = (id, label, pts, max, note) => items.push({id, label, pts, max, note});
+  let p = (I.abstrakt?3:0) + (I.recorded?4:0) + (I.client?3:0) + (h.approach!=null?5:0);
+  const im = [!I.abstrakt&&"Abstrakt", !I.recorded&&"the recorded line", !I.client&&"the client name", h.approach==null&&"asking how they use AI today"].filter(Boolean);
+  add("approach","Intro", p, 15, im.length ? `Missed: ${im.join(", ")}.` : "Named Abstrakt, the recorded line and the client, then asked how they use AI.");
+  p = (h.issues!=null?8:0) + (h.acknowledge!=null?7:0);
+  add("issues","Bottlenecks", p, 15, h.issues==null ? "Never asked about bottlenecks or challenges." : h.acknowledge==null ? "Asked, but didn't restate what they said and thank them." : "Asked about challenges and acknowledged the answer.");
+  p = (h.creed!=null?10:0) + (st.looked?5:0);
+  add("creed","Creed", p, 15, h.creed==null ? "Didn't explain why you're reaching out." : st.looked ? "Explained the re:Invent meetings and asked what they've looked into." : "Explained the meetings but skipped \"What resources have you looked into?\"");
+  p = (h.capabilities!=null?8:0) + (st.email?4:0) + (st.curious?3:0);
+  const rm = [h.capabilities==null&&"the three value areas", !st.email&&"the email ask", !st.curious&&"what they're most curious about"].filter(Boolean);
+  add("capabilities","Rundown", p, 15, rm.length ? `Missed: ${rm.join(", ")}.` : "Gave the rundown, got the email and their main interest.");
+  p = h.recommendation!=null ? (st.recSpecific ? 15 : 10) : 0;
+  add("recommendation","Meeting", p, 15, h.recommendation==null ? "Never recommended the re:Invent meeting." : st.recSpecific ? "Recommended the meeting, tied to what they shared." : "Recommended it, but didn't tie it to their issue or interest.");
+  p = (h.close!=null?6:0) + (st.offeredChoice?6:0);
+  add("close","Schedule", p, 12, h.close==null ? "Didn't get to scheduling." : st.offeredChoice ? "Offered two days, then two times." : "Got to scheduling. Offer two options each time.");
+  const cd = st.confirmDetails, cm = cd ? ["tz","loc","email","accept"].filter(k=>!cd[k]) : [];
+  p = st.booked ? 5 + (cd ? (4 - cm.length) * 2 : 0) : 0;
+  add("confirm","Confirm", p, 13, !st.booked ? "No meeting confirmed." : cm.length ? "Booked. Also confirm: " + cm.map(k=>({tz:"time zone",loc:"location",email:"email",accept:"ask them to accept the invite"}[k])).join(", ") + "." : "Booked with a full confirmation.");
 
-  // order: count route stages hit before an earlier stage
-  const order = ROUTE.map(r=>r.id).filter(id=>h[id]!=null);
-  let outOfOrder = 0;
-  for(let i=1;i<order.length;i++) if(h[order[i]] < h[order[i-1]]) outOfOrder++;
-  const orderPenalty = Math.min(10, outOfOrder*3);
-  let total = items.reduce((s,x)=>s+x.pts,0) - orderPenalty;
-  total = Math.max(0, Math.min(100, total));
+  const scope = scopeSteps(), shown = items.filter(x => scope.includes(x.id));
+  const done = ROUTE.map(r=>r.id).filter(id => scope.includes(id) && stepDone(id));
+  let outOfOrder = 0; for(let i = 1; i < done.length; i++) if(stepTurn(done[i]) < stepTurn(done[i-1])) outOfOrder++;
+  const orderPenalty = st.drill ? 0 : Math.min(10, outOfOrder * 3);
+  const max = shown.reduce((a,x)=>a+x.max,0), got = shown.reduce((a,x)=>a+x.pts,0);
+  const total = Math.max(0, Math.min(100, Math.round(got / max * 100) - orderPenalty));
 
   const tips = [];
-  const firstMissing = ROUTE.find(r=>h[r.id]==null);
-  if(firstMissing) tips.push(`First missed stop: ${firstMissing.label}. ${GOALS[firstMissing.id]}`);
+  const firstMissing = ROUTE.find(r => scope.includes(r.id) && !stepDone(r.id));
+  if(firstMissing) tips.push(`First missed step: ${ROUTE.indexOf(firstMissing)+1} ${firstMissing.label}. ${GOALS[firstMissing.id]}`);
   if(outOfOrder) tips.push(`You jumped ahead on the route ${outOfOrder} time${outOfOrder>1?"s":""}. Practice the same route every time.`);
-  if(st.recBeforeIssue) tips.push("You recommended the meeting before learning their challenge. An issue makes the recommendation more specific.");
+  if(st.recBeforeIssue && !st.drill) tips.push("You recommended the meeting before learning their challenge. An issue makes the recommendation more specific.");
   if(st.longTurns) tips.push("Some of your turns ran long. Say one script block, then let them talk.");
   if(st.offRoute >= 2) tips.push("Several lines didn't move the call forward. Lean on the script wording.");
   if(st.wrongConfirm) tips.push("You read back the wrong day or time when confirming. Repeat exactly what they chose.");
   if(st.ended) tips.push("The prospect hung up. On Tough, earn the right to ask by starting with how they use AI today.");
-  if(!tips.length) tips.push("Clean run. Try it on Tough or with Hide script lines turned on.");
-  return {total, items, tips, outOfOrder, orderPenalty};
+  if(!tips.length) tips.push(st.drill ? "Clean run on this step. Try the full call next." : "Clean run. Try it on Tough or with Hide script lines turned on.");
+  return {total, items: shown, tips, outOfOrder, orderPenalty, missed: ROUTE.filter(r => scope.includes(r.id) && !stepDone(r.id)).map(r=>r.label)};
+}
+
+/* ---------- Progress (saved on this device) ---------- */
+function loadHistory(){ try{ return JSON.parse(localStorage.getItem("ct_history") || "[]"); }catch(e){ return []; } }
+function saveHistory(entry){ try{ const h = loadHistory(); h.push(entry); localStorage.setItem("ct_history", JSON.stringify(h.slice(-60))); }catch(e){} }
+function renderProgress(){
+  const el = $("progress"), h = loadHistory(); if(!el) return;
+  if(!h.length){ el.hidden = true; return; }
+  el.hidden = false;
+  const last = h.slice(-8).reverse();
+  const best = {}; h.filter(x=>!x.drill).forEach(x=>{ best[x.pid] = Math.max(best[x.pid] || 0, x.score); });
+  const miss = {}; h.filter(x=>!x.drill).slice(-10).forEach(x=> (x.missed||[]).forEach(m => miss[m] = (miss[m]||0) + 1));
+  const top = Object.entries(miss).sort((a,b)=>b[1]-a[1])[0];
+  const full = h.filter(x=>!x.drill), avg = full.length ? Math.round(full.slice(-5).reduce((a,x)=>a+x.score,0) / Math.min(5, full.length)) : null;
+  const nameOf = id => (PERSONAS.find(p=>p.id===id)||{name:id}).name.split(" ")[0];
+  el.innerHTML = `<div class="eyebrow">Your progress</div>
+    <div class="prog-grid">
+      <div><div class="prog-k">Recent calls</div><div class="spark">${last.slice().reverse().map(x=>`<i style="height:${Math.max(6, x.score)}%" title="${esc(nameOf(x.pid))}: ${x.score}"></i>`).join("")}</div>
+        <div class="prog-sub">${last.slice(0,4).map(x=>`${esc(nameOf(x.pid))}${x.drill?" (drill)":""} <b>${x.score}</b>`).join(" · ")}</div></div>
+      <div><div class="prog-k">Average, last 5 full calls</div><div class="prog-v">${avg == null ? "–" : avg}</div></div>
+      <div><div class="prog-k">Best by prospect</div><div class="prog-sub">${Object.entries(best).map(([id,v])=>`${esc(nameOf(id))} <b>${v}</b>`).join(" · ") || "–"}</div></div>
+      <div><div class="prog-k">Most-missed step</div><div class="prog-sub">${top ? `<b>${esc(top[0])}</b> (missed in ${top[1]} of the last ${Math.min(10, full.length)} calls)` : "None yet"}</div></div>
+    </div>`;
 }
 
 /* ---------- UI ---------- */
 function renderPersonas(){
-  $("personas").innerHTML = PERSONAS.map(p=>`<button class="persona" data-id="${p.id}" aria-pressed="${p===persona}"><b>${esc(p.name)}</b><span>${esc(p.company.replace(/\s*\(.*\)$/,""))}</span></button>`).join("");
-  $("personas").querySelectorAll(".persona").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; persona = PERSONAS.find(p=>p.id===b.dataset.id); renderPersonas(); });
+  $("personas").innerHTML = PERSONAS.map(p=>`<button class="persona" data-id="${p.id}" aria-pressed="${p===persona}"><b>${esc(p.name)}</b><span>${esc(p.company.replace(/\s*\(.*\)$/,""))}</span></button>`).join("") + `<button class="persona surprise" id="surpriseBtn" type="button"><b>Surprise me</b><span>Random prospect and difficulty. Starts right away.</span></button>`;
+  $("surpriseBtn").onclick = ()=>{ if(status!=="idle") return; persona = pick(PERSONAS); difficulty = pick(["easy","normal","normal","tough"]); $("diff").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x.dataset.v===difficulty))); renderPersonas(); startCall(); };
+  $("personas").querySelectorAll(".persona[data-id]").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; persona = PERSONAS.find(p=>p.id===b.dataset.id); renderPersonas(); });
   fillVoicePick();
 }
 $("diff").querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; difficulty=b.dataset.v; $("diff").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x===b))); });
 
-function nextStage(){ return st ? ROUTE.find(r=>st.hits[r.id]==null) : ROUTE[0]; }
+let mode = "full", drillStep = "issues";
+$("mode").querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; mode = b.dataset.v; $("mode").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x===b))); $("drillWrap").hidden = mode !== "drill"; });
+$("drillStep").querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; drillStep = b.dataset.v; $("drillStep").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x===b))); });
+function nextStage(){ if(!st) return ROUTE[0]; const scope = scopeSteps(); return ROUTE.find(r => scope.includes(r.id) && !stepDone(r.id)); }
 function renderRoute(){
   const n = nextStage(), live = status!=="idle";
-  $("route").innerHTML = ROUTE.map((r,i)=>{ const done = st && st.hits[r.id]!=null; return `<li class="${done?"done":""} ${n&&n.id===r.id&&live?"next":""}"><span class="dot">${done?"✓":i+1}</span>${r.label}</li>`; }).join("");
-  let id = n ? n.id : "close";
-  if(st && st.hits.close!=null && !st.booked) id = st.time ? "confirm" : "close";
+  const scope = st ? scopeSteps() : ROUTE.map(r=>r.id);
+  $("route").innerHTML = ROUTE.map((r,i)=>{ const done = stepDone(r.id), half = stepPartial(r.id), off = !scope.includes(r.id); return `<li class="${done?"done":""} ${half?"half":""} ${off?"off":""} ${n&&n.id===r.id&&live?"next":""}"><span class="dot">${done?"✓":i+1}</span>${r.label}</li>`; }).join("");
+  let id = n ? n.id : "confirm";
+  if(n && (n.id === "close" || n.id === "confirm") && st && !st.booked) id = st.time ? "confirm" : "close";
   $("nextTitle").textContent = st && st.booked ? "Booked" : (n ? n.label : "Close");
   $("nextLines").innerHTML = $("hideScript").checked ? `<div class="line"><small>Goal</small>${esc(GOALS[id])}</div>` :
     scriptFor(id, live?persona:null).map(([t,s])=>`<div class="line"><small>${esc(t)}</small>${s}</div>`).join("");
   const c = st && st.coach; $("coach").hidden = !c; $("coach").textContent = c ? "Coach: " + c : "";
+  const lines = scriptFor(id, live?persona:null) || [];
+  $("mini").hidden = !live || !st || st.booked || status !== "live";
+  $("miniTitle").textContent = (ROUTE.findIndex(r=>r.id===(n?n.id:id))+1) + " " + (n ? n.label : "Confirm");
+  $("miniLine").innerHTML = $("hideScript").checked ? esc(GOALS[id]) : (lines[0] ? lines[0][1] : "");
 }
 $("hideScript").onchange = renderRoute;
 document.querySelectorAll(".grid-fields input").forEach(i=>i.oninput=renderRoute);
@@ -588,7 +706,7 @@ function addMsg(who, text){
   const t = document.createElement("span"); t.textContent = text; d.append(t);
   $("log").append(d); $("log").scrollTop = $("log").scrollHeight; return t;
 }
-function setStatus(s, label){ status = s; if(s !== "live"){ try{ wRec = null; wCloseAll(); wSetUI("idle"); }catch(e){} } const el=$("status"); el.className = "status " + ({live:"live",booked:"booked",ended:"ended"}[s]||""); el.textContent = label; }
+function setStatus(s, label){ status = s; if(s !== "live"){ try{ wRec = null; wCloseAll(); wSetUI("idle"); }catch(e){} if(st && s !== "idle") stopTimer(); } const el=$("status"); el.className = "status " + ({live:"live",booked:"booked",ended:"ended"}[s]||""); el.textContent = label; }
 function setInput(on){ $("input").disabled = !on; $("sendBtn").disabled = !on; $("micBtn").disabled = !on; if(!on) stopMic(true); }
 /* ---------- Voice personalities (browser text-to-speech, no credits) ---------- */
 const VOICE = {
@@ -599,7 +717,11 @@ const VOICE = {
   priya: {gender:"f", rate:1.28, pitch:1.0, prefer:["Karen","Moira","Tessa","Veena","Libby","Sonia","Google UK English Female","Victoria","Susan"],
           fillers:["Yeah, yeah. ","Right, ","Okay, so, ","Sorry, "], chance:.4},
   tom:   {gender:"m", rate:.86, pitch:.95,  prefer:["Daniel","Ryan","Thomas","Christopher","Eric","Google UK English Male","David","Alex"],
-          fillers:["Well, ","Hmm, ","You know, ","Let's see, "], chance:.4}
+          fillers:["Well, ","Hmm, ","You know, ","Let's see, "], chance:.4},
+  jordan:{gender:"m", rate:1.02, pitch:.9, prefer:["Andrew","Brian","Christopher","Guy","David"],
+          fillers:["Yeah, ","Honestly, ","Look, ","Okay, "], chance:.35},
+  rachel:{gender:"f", rate:1.05, pitch:1.1, prefer:["Michelle","Emma","Ava","Jenny","Samantha"],
+          fillers:["Oh, ","Ooh, ","Okay, ","So, "], chance:.4}
 };
 const FEMALE = /samantha|jenny|aria|zira|allison|ava|zoe|joelle|noelle|nora|ana\b|karen|moira|tessa|veena|libby|sonia|victoria|susan|female|fiona|serena|michelle|emma|olivia|natasha|hazel|catherine|kate|nicky/i;
 const MALE = /david|guy|alex|fred|daniel|mark|tom|ryan|thomas|christopher|eric|male|george|james|oliver|aaron|rishi|arthur|brian|andrew|roger|evan|nathan|steffan|davis|tony|jason/i;
@@ -639,6 +761,13 @@ function speak(text, done){
 /* ---------- Microphone (browser speech recognition, no credits) ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, listening = false, micBase = "", silenceTimer = null, lastFromMic = false, micBlocked = false;
+const COARSE = matchMedia("(pointer: coarse)").matches;
+function setHint(){ $("hint").textContent = COARSE ? "Tap Talk and speak, or type and tap Send. Stick close to the script wording." : "Tap Talk (or Ctrl+M) to speak · Enter sends · Shift+Enter for a new line · Stick close to the script wording"; }
+function fmtDur(ms){ const s = Math.max(0, Math.round(ms/1000)); return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); }
+let timerId = 0;
+function startTimer(){ clearInterval(timerId); $("timer").hidden = false; $("timer").textContent = "0:00"; timerId = setInterval(()=>{ if(st && status === "live") $("timer").textContent = fmtDur(Date.now() - st.startAt); }, 1000); }
+function stopTimer(){ clearInterval(timerId); if(st){ if(!st.endAt) st.endAt = Date.now(); $("timer").textContent = fmtDur(st.endAt - st.startAt); } }
+function autoNatural(){ try{ const c = navigator.connection; if(c && (c.saveData || /2g|3g/.test(c.effectiveType || "") || (c.downlink && c.downlink < 1.5))) return false; if(navigator.deviceMemory && navigator.deviceMemory < 2) return false; }catch(e){} return typeof WebAssembly === "object"; }
 function micMsg(t){ $("micMsg").hidden = !t; $("micMsg").textContent = t || ""; }
 function setMicUI(){ const b=$("micBtn"); b.setAttribute("aria-pressed", String(listening)); $("micLbl").textContent = listening ? "Listening…" : "Talk"; b.setAttribute("aria-label", listening ? "Stop listening" : "Speak your line"); }
 const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -790,9 +919,8 @@ function toggleMic(){
 }
 function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled){ if(useWhisperMic()) setTimeout(()=>{ if(status === "live" && !$("input").disabled) wStart(); }, IOS ? 400 : 150); else startMic(); } }
 $("micBtn").onclick = ()=>{ unlockTTS(); toggleMic(); };
-try{ const nv = localStorage.getItem("ct_natural"); if(nv !== null) $("natural").checked = nv === "1"; }catch(e){}
-$("deviceVoiceRow").hidden = $("natural").checked;
-$("natural").onchange = e=>{ natFailed = false; $("deviceVoiceRow").hidden = e.target.checked; try{ localStorage.setItem("ct_natural", e.target.checked ? "1" : "0"); }catch(err){} };
+$("natural").checked = autoNatural();
+$("deviceVoiceRow").hidden = true;
 $("voicePick").onchange = e=>{ try{ localStorage.setItem("ct_voice_"+persona.id, e.target.value); }catch(err){} };
 $("voiceTest").onclick = ()=>{ unlockTTS(); const was = $("voice").checked; $("voice").checked = true; speak(pick(persona.lines.pickup) + " " + pick(persona.lines.aiUse)); $("voice").checked = was; };
 document.addEventListener("keydown", e => { if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="m" && status==="live"){ e.preventDefault(); toggleMic(); } });
@@ -804,8 +932,8 @@ if(inClaude){ $("handsFree").disabled = true; $("handsFreeWrap").title = NO_MIC_
 
 /* ---------- Natural AI voices (Piper, runs in the browser, free) ---------- */
 const PIPER = { hf:"https://huggingface.co/diffusionstudio/piper-voices/resolve/main/", ort:"https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.18.0/", ph:"https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize" };
-const PVOICE = { dana:"en/en_US/amy/medium/en_US-amy-medium.onnx", priya:"en/en_US/lessac/medium/en_US-lessac-medium.onnx", marcus:"en/en_US/ryan/medium/en_US-ryan-medium.onnx", tom:"en/en_US/joe/medium/en_US-joe-medium.onnx" };
-const PSPEED = { dana:0.92, priya:0.84, marcus:1.08, tom:1.06 };
+const PVOICE = { dana:"en/en_US/amy/medium/en_US-amy-medium.onnx", priya:"en/en_US/lessac/medium/en_US-lessac-medium.onnx", marcus:"en/en_US/ryan/medium/en_US-ryan-medium.onnx", tom:"en/en_US/joe/medium/en_US-joe-medium.onnx", jordan:"en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx", rachel:"en/en_US/kristin/medium/en_US-kristin-medium.onnx" };
+const PSPEED = { dana:0.92, priya:0.84, marcus:1.08, tom:1.06, jordan:0.98, rachel:0.95 };
 let natFailed = false, natGen = 0, natAudio = null; const natLoads = {}; const scriptLoads = {};
 function useNatural(){ return !!($("natural") && $("natural").checked) && !natFailed && typeof WebAssembly === "object"; }
 function loadScript(src){ return scriptLoads[src] || (scriptLoads[src] = new Promise((res, rej)=>{ const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = ()=>{ delete scriptLoads[src]; rej(new Error("script " + src)); }; document.head.append(s); })); }
@@ -906,15 +1034,29 @@ async function naturalSpeak(text, done){
 }
 
 function unlockTTS(){ unlockAudio(); try{ if(window.__ttsUnlocked || !window.speechSynthesis || !$("voice").checked) return; const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); window.__ttsUnlocked = true; }catch(e){} }
+function seedDrill(step){
+  const L = persona.lines;
+  const pre = { issues:["approach"], creed:["approach","issues","acknowledge"], capabilities:["approach","issues","acknowledge","creed"], recommendation:["approach","issues","acknowledge","creed","capabilities","email"], close:["approach","issues","acknowledge","creed","capabilities","email","recommendation"] }[step];
+  pre.forEach(k => st.hits[k] = 0);
+  Object.assign(st.intro, {abstrakt:true, recorded:true, client:true, reinvent:true});
+  st.aiUse = true; if(pre.includes("issues")) st.issue = true; if(pre.includes("creed")) st.looked = true;
+  if(pre.includes("email")){ st.email = true; st.curious = true; }
+  if(pre.includes("recommendation")){ st.agreed = true; st.objections = 0; st.recSpecific = true; }
+  st.drill = step;
+  st.lastWas = { issues:"aiUse", creed:"ack", capabilities:"looked", recommendation:"email", close:"agree" }[step];
+  return pick({ issues:L.aiUse, creed:L.ack, capabilities:L.looked, recommendation:L.curious, close:L.agree }[step]);
+}
 function startCall(){ unlockTTS(); if(useNatural()) piperLoad(persona.id).catch(()=>{}); if(useWhisperMic() && !inClaude) setTimeout(()=>loadASR().catch(()=>{}), 1500);
   st = newState(); turns = []; $("log").innerHTML = ""; $("score").hidden = true;
   $("who").innerHTML = `<b>${esc(persona.name)}</b><div>${esc(persona.company.replace(/\s*\(.*\)$/,""))}</div>`;
   $("input").placeholder = "Say your line…"; setStatus("live","On call"); $("setup").hidden = true; $("startBtn").textContent = "New call"; $("endBtn").disabled = false;
-  addMsg("sys","Ring… ring… they picked up.");
-  const g = pick(persona.lines.pickup); /* greeting stays as written */ turns.push({who:"prospect",text:g}); addMsg("prospect", g); speak(g);
+  let g;
+  if(mode === "drill"){ g = seedDrill(drillStep); addMsg("sys", `Drill: ${DRILL_STEPS[drillStep].map(id=>ROUTE.find(r=>r.id===id).label).join(" + ")}. The call is already under way. Pick up from here.`); }
+  else { addMsg("sys","Ring… ring… they picked up."); g = pick(persona.lines.pickup); }
+  turns.push({who:"prospect",text:g}); addMsg("prospect", g); speak(g); startTimer();
   setInput(true); renderRoute(); $("input").focus();
 }
-function backToSetup(){ st = null; turns = []; setStatus("idle","Idle"); $("setup").hidden=false; $("endBtn").disabled=true; $("startBtn").textContent="Start call"; setInput(false); $("log").innerHTML=""; $("score").hidden=true; $("who").innerHTML='<b>No call yet</b><div>Pick a prospect and press Start call.</div>'; renderRoute(); }
+function backToSetup(){ clearInterval(timerId); $("timer").hidden = true; st = null; turns = []; setStatus("idle","Idle"); $("setup").hidden=false; $("endBtn").disabled=true; $("startBtn").textContent="Start call"; setInput(false); $("log").innerHTML=""; $("score").hidden=true; $("who").innerHTML='<b>No call yet</b><div>Pick a prospect and press Start call.</div>'; renderRoute(); renderProgress(); }
 $("startBtn").onclick = ()=> status==="idle" ? startCall() : backToSetup();
 
 function send(){
@@ -922,6 +1064,7 @@ function send(){
   if(typing && Date.now() - (window.__typingAt||0) > 5000) typing = false; if(!text || typing || status!=="live") return; window.__typingAt = Date.now();
   stopMic(true); stopNatural(); $("input").value = ""; turns.push({who:"rep",text}); addMsg("rep", text);
   const r = prospectReply(text); r.text = withPersonality(r.text);
+  st.review.push({ text, tags: ROUTE.filter(x => STEP_REQ[x.id].some(k => st.hits[k] === st.repTurn)).map(x => x.label) });
   typing = true; setInput(false);
   const bubble = addMsg("prospect","…");
   const delay = window.__FAST ? 0 : 450 + Math.min(900, r.text.length*8);
@@ -930,7 +1073,8 @@ function send(){
     const ongoing = !r.outcome;
     if(r.outcome==="booked"){ setStatus("booked","Booked"); addMsg("sys","Meeting booked! The call is over."); $("endBtn").textContent = "See my score"; callOverActions(); }
     else if(r.outcome==="ended"){ setStatus("ended","Hung up"); addMsg("sys","The prospect hung up. The call is over."); $("endBtn").textContent = "See my score"; callOverActions(); }
-    else { setInput(true); $("input").focus(); }
+    else { setInput(true); if(!COARSE) $("input").focus(); }
+    if(ongoing && st.drill && !st.drillDone && DRILL_STEPS[st.drill].every(stepDone)){ st.drillDone = true; addMsg("sys", "Step done. Tap End call & score to see how you did, or keep going."); }
     if(!speak(r.text, ongoing ? listenAgain : null) && ongoing) listenAgain();
     renderRoute();
   }, delay);
@@ -945,23 +1089,27 @@ function endCall(){
   try{speechSynthesis.cancel()}catch(e){} stopNatural();
   if(status==="live") setStatus("ended","Call ended");
   setInput(false); $("endBtn").disabled = true; $("endBtn").textContent = "End call & score";
+  stopTimer();
   const s = scoreCall(), c = persona.card, sc = $("score");
+  saveHistory({ ts: Date.now(), pid: persona.id, diff: difficulty, drill: st.drill, score: s.total, booked: st.booked, missed: s.missed, dur: st.endAt - st.startAt });
+  const review = st.review.map(x => `<li><span class="rv-text">${esc(x.text)}</span> ${x.tags.length ? x.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join(" ") : `<span class="chip miss">no step</span>`}</li>`).join("");
   sc.innerHTML = `
     <div class="score-head"><div class="big">${s.total}<small>/100</small></div>
-      <div style="min-width:0;flex:1"><div class="eyebrow">${st.booked?"Meeting booked":"No meeting booked"} · ${esc(persona.name)} · ${esc({easy:"Warm",normal:"Normal",tough:"Tough"}[difficulty])}</div>
+      <div style="min-width:0;flex:1"><div class="eyebrow">${st.drill ? "Drill: " + esc(DRILL_STEPS[st.drill].map(id=>ROUTE.find(r=>r.id===id).label).join(" + ")) : (st.booked?"Meeting booked":"No meeting booked")} · ${esc(persona.name)} · ${esc({easy:"Warm",normal:"Normal",tough:"Tough"}[difficulty])} · ${fmtDur(st.endAt - st.startAt)}</div>
       <p style="margin:6px 0 0">${esc(s.tips[0])}</p></div></div>
     <div class="score-grid">
-      <div><div class="eyebrow">Route points</div><ul class="stage-list">${s.items.map(x=>`<li><span class="${x.pts===x.max?"ok":x.pts>0?"part":"no"}">${x.pts===x.max?"✓":x.pts>0?"–":"✗"}</span><span><b>${esc(x.label)}</b> <span class="pts">${x.pts}/${x.max}</span> — ${esc(x.note)}</span></li>`).join("")}${s.orderPenalty?`<li><span class="no">−</span><span><b>Order</b> <span class="pts">−${s.orderPenalty}</span> — Out of route order ${s.outOfOrder}×.</span></li>`:""}</ul></div>
+      <div><div class="eyebrow">${st.drill ? "Step points" : "Route points"}</div><ul class="stage-list">${s.items.map(x=>`<li><span class="${x.pts===x.max?"ok":x.pts>0?"part":"no"}">${x.pts===x.max?"✓":x.pts>0?"–":"✗"}</span><span><b>${esc(x.label)}</b> <span class="pts">${x.pts}/${x.max}</span> — ${esc(x.note)}</span></li>`).join("")}${s.orderPenalty?`<li><span class="no">−</span><span><b>Order</b> <span class="pts">−${s.orderPenalty}</span> — Out of route order ${s.outOfOrder}×.</span></li>`:""}</ul></div>
       <div><div class="eyebrow">Work on</div><ul class="plain">${s.tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
       <div><div class="eyebrow">Prospect card (now revealed)</div><ul class="plain">
         <li><b>AI today:</b> ${esc(c.aiUse)}</li><li><b>Hidden issue:</b> ${esc(c.issue)}</li><li><b>Looked into:</b> ${esc(c.looked)}</li><li><b>Prefers:</b> ${esc(c.pref)}</li></ul></div>
     </div>
+    ${review ? `<div class="review"><div class="eyebrow">Call review: your lines and the steps they hit</div><ol class="rv">${review}</ol></div>` : ""}
     <div class="actions"><button class="btn primary" id="againBtn">Call again</button><button class="btn" id="otherBtn">Pick another prospect</button></div>`;
   sc.hidden = false; sc.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"});
-  $("againBtn").onclick = startCall; $("otherBtn").onclick = backToSetup;
+  $("againBtn").onclick = startCall; $("otherBtn").onclick = backToSetup; renderProgress();
 }
 $("endBtn").onclick = endCall;
 
-renderPersonas(); renderRoute(); try{ fillVoicePick(); setTimeout(()=>{ loadVoices(); fillVoicePick(); }, 700); }catch(e){}
+setHint(); renderPersonas(); renderRoute(); renderProgress(); try{ fillVoicePick(); setTimeout(()=>{ loadVoices(); fillVoicePick(); }, 700); }catch(e){}
 </script>
 </body></html>
