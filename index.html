@@ -200,6 +200,7 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
         <button class="btn primary" id="sendBtn" disabled>Send</button>
       </div>
       <div class="hint" id="micMsg" role="status" hidden></div>
+      <div id="micLevel" hidden style="margin:0 14px 10px;height:6px;border-radius:3px;background:var(--line);overflow:hidden"><i style="display:block;height:100%;width:0%;background:var(--good);transition:width .08s"></i></div>
       <div class="hint">Tap Talk or press Ctrl+M to speak · Enter sends · Shift+Enter for a new line · Prospects are scripted, so stick close to the route wording</div>
     </section>
 
@@ -320,24 +321,24 @@ const PERSONAS = [
 ];
 
 const ROUTE = [
-  {id:"approach", label:"Current approach"},
-  {id:"issues", label:"Issues"},
-  {id:"acknowledge", label:"Acknowledge"},
+  {id:"approach", label:"Intro"},
+  {id:"issues", label:"Bottlenecks"},
   {id:"creed", label:"Creed"},
-  {id:"capabilities", label:"Capabilities"},
-  {id:"email", label:"Email"},
-  {id:"recommendation", label:"Meeting recommendation"},
-  {id:"close", label:"Close"}
+  {id:"capabilities", label:"Rundown"},
+  {id:"recommendation", label:"Meeting"},
+  {id:"close", label:"Schedule"},
+  {id:"confirm", label:"Confirm"}
 ];
 const GOALS = {
   approach:"Introduce yourself (Abstrakt, recorded line, client, re:Invent) and ask how they currently use AI.",
-  issues:"Ask what bottlenecks or challenges they're running into.",
+  issues:"Ask what bottlenecks or challenges they're running into, then restate what they said and thank them (or \"good to hear\" if none).",
   acknowledge:"Restate their issue in a few words and thank them, or say \"good to hear\" if they have none.",
   creed:"Explain the meetings with the team at re:Invent about OpenAI and AWS, then ask what resources they've looked into.",
-  capabilities:"Give the rundown: finding information, reducing repetitive work, building AI into products and services.",
+  capabilities:"Give the rundown (find information, reduce repetitive work, build AI into products and services), then ask for an email and what they're most curious about.",
   email:"Ask for a good email, then what they're most curious to learn more about.",
   recommendation:"Recommend meeting the team at re:Invent, tied to their issue or interest.",
-  close:"Offer two days, mornings or afternoons, two times; then confirm day, time, time zone, location and email."
+  close:"Offer two days, then mornings or afternoons, then two specific times.",
+  confirm:"Confirm day, time, time zone, location and email, and ask them to accept the invitation."
 };
 
 const $ = id => document.getElementById(id);
@@ -361,6 +362,7 @@ function scriptFor(id, p){
     recommendation:[["Issue or clear interest",`"Okay, so I am going to get you some general information — but since you mentioned ${v("[issue or interest]")}, I'd recommend getting you connected with ${v(f.team)} while you're at re:Invent so they can explore that with you."`],["General information only",`"Okay, so I am going to get you some general information. I'd also recommend getting you connected with ${v(f.team)} while you're at re:Invent so you can get a clearer picture of what's available and what might be useful for your business."`]],
     close:[["Schedule",`"They have time available ${v(f.day1)} and ${v(f.day2)}. Do mornings or afternoons work better for you?"\n\n"I have ${v(f.t1)} or ${v(f.t2)}. Which works better?"`],["Confirm",`"Perfect. I've got you down for ${v(st&&st.day?st.day:"[day]")} at ${v(st&&st.time?st.time:"[time]")} ${v(f.tz)}, at ${v(f.loc)}. I'll send the invitation to ${v(st&&st.email&&persona?persona.lines.email[0].match(/[\w.]+@[\w.]+\w/)[0]:"[confirmed email]")}.\n\nPlease accept the invitation when it comes through so the team knows you received it. We look forward to meeting you at re:Invent."`]]
   };
+  S.issues = S.issues.concat(S.acknowledge); S.capabilities = S.capabilities.concat(S.email); S.confirm = [S.close[1]]; S.close = [S.close[0]];
   return S[id];
 }
 
@@ -451,7 +453,7 @@ function prospectReply(text){
     if(saidTimes.length && !saidTimes.some(x=>x.split(" ")[0]===st.time.split(" ")[0])){ st.wrongConfirm = true; st.coach = "Read back exactly what they picked."; st.lastWas="fix"; return {text:`Sorry, I thought we said ${st.time}?`}; }
     st.coach = "Booked. End the call to see your score.";
     st.confirmDetails = {day: !!(st.day && a.t.includes(st.day.toLowerCase())), time: a.times.length>0 || a.t.includes(st.time.split(":")[0]), tz:a.tz, loc:a.loc, email:a.emailMention, accept:a.inviteAccept};
-    st.booked = true;
+    st.booked = true; hit("confirm");
     const needEmail = !st.email; st.email = true;
     return {text:(needEmail ? `Send it to ${L.email[0].match(/[\w.]+@[\w.]+\w/)[0]}. ` : "") + say("bye", L.bye), outcome:"booked"};
   }
@@ -560,7 +562,7 @@ function scoreCall(){
 
 /* ---------- UI ---------- */
 function renderPersonas(){
-  $("personas").innerHTML = PERSONAS.map(p=>`<button class="persona" data-id="${p.id}" aria-pressed="${p===persona}"><span class="tag">${p.tag}</span><b>${esc(p.name)}</b><span>${esc(p.title)} · ${esc(p.company)}</span><span>${esc(p.blurb)}</span><span class="vtag">Voice: ${({dana:"bright and chatty",marcus:"low, slow, clipped",priya:"fast and hurried",tom:"calm and measured"})[p.id]}</span></button>`).join("");
+  $("personas").innerHTML = PERSONAS.map(p=>`<button class="persona" data-id="${p.id}" aria-pressed="${p===persona}"><b>${esc(p.name)}</b><span>${esc(p.company.replace(/\s*\(.*\)$/,""))}</span></button>`).join("");
   $("personas").querySelectorAll(".persona").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; persona = PERSONAS.find(p=>p.id===b.dataset.id); renderPersonas(); });
   fillVoicePick();
 }
@@ -571,7 +573,7 @@ function renderRoute(){
   const n = nextStage(), live = status!=="idle";
   $("route").innerHTML = ROUTE.map((r,i)=>{ const done = st && st.hits[r.id]!=null; return `<li class="${done?"done":""} ${n&&n.id===r.id&&live?"next":""}"><span class="dot">${done?"✓":i+1}</span>${r.label}</li>`; }).join("");
   let id = n ? n.id : "close";
-  if(st && st.hits.close!=null && !st.booked) id = "close";
+  if(st && st.hits.close!=null && !st.booked) id = st.time ? "confirm" : "close";
   $("nextTitle").textContent = st && st.booked ? "Booked" : (n ? n.label : "Close");
   $("nextLines").innerHTML = $("hideScript").checked ? `<div class="line"><small>Goal</small>${esc(GOALS[id])}</div>` :
     scriptFor(id, live?persona:null).map(([t,s])=>`<div class="line"><small>${esc(t)}</small>${s}</div>`).join("");
@@ -669,18 +671,18 @@ function startMic(){
 }
 function stopMic(cancel){ if(typeof wRec !== "undefined" && wRec){ wFinish(!!cancel); } clearTimeout(silenceTimer); if(rec && listening){ rec._autoSend = !cancel; try{ cancel ? rec.abort() : rec.stop(); }catch(e){} } if(cancel){ listening = false; setMicUI(); } }
 /* ---------- Built-in speech-to-text (Whisper in the browser) — used on iPhone and wherever the browser's own mic is unreliable ---------- */
-const TFJ = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/dist/transformers.min.js";
+const TFJ = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/transformers.min.js";
 let asrP = null, wCtx = null, wStream = null, wNode = null, wSrc = null, wRec = null, wForce = false;
-function useWhisperMic(){ return wForce || IOS || !SR; }
+let asrFailed = false; function useWhisperMic(){ return !asrFailed || !SR; }
 function loadASR(onProg){
   return asrP || (asrP = (async()=>{
     const T = await import(TFJ);
     T.env.allowLocalModels = false;
-    return await T.pipeline("automatic-speech-recognition", "Xenova/whisper-tiny.en", { dtype: "q8", device: "wasm",
+    return await T.pipeline("automatic-speech-recognition", "onnx-community/moonshine-tiny-ONNX", { dtype: "q8", device: "wasm",
       progress_callback: p => { if(onProg && p && p.status === "progress" && /onnx/.test(p.file || "")) onProg(Math.round(p.progress || 0)); } });
   })().catch(e=>{ asrP = null; throw e; }));
 }
-function wSetUI(state){ const b = $("micBtn"); b.setAttribute("aria-pressed", String(state === "rec")); $("micLbl").textContent = state === "rec" ? "Listening…" : state === "busy" ? "Working…" : "Talk"; }
+function wSetUI(state){ const lv = $("micLevel"); if(lv){ lv.hidden = state !== "rec"; lv.firstChild.style.width = "0%"; } const b = $("micBtn"); b.setAttribute("aria-pressed", String(state === "rec")); $("micLbl").textContent = state === "rec" ? "Listening…" : state === "busy" ? "Working…" : "Talk"; }
 function wRelease(){ try{ wNode && wNode.disconnect(); }catch(e){} try{ wSrc && wSrc.disconnect(); }catch(e){} try{ wStream && wStream.getTracks().forEach(t=>t.stop()); }catch(e){} wNode = wSrc = wStream = null; }
 function resample16k(chunks, inRate){
   let n = 0; chunks.forEach(c => n += c.length); const all = new Float32Array(n); let o = 0; chunks.forEach(c => { all.set(c, o); o += c.length; });
@@ -710,8 +712,8 @@ async function wStart(){
     if(!wRec) return;
     const d = ev.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d));
     let s = 0; for(let i = 0; i < d.length; i += 4) s += d[i] * d[i]; const rms = Math.sqrt(s / (d.length / 4));
-    const now = performance.now();
-    if(rms > 0.02){ heard = true; lastLoud = now; }
+    const now = performance.now(); const lv = $("micLevel"); if(lv) lv.firstChild.style.width = Math.min(100, Math.round(rms * 900)) + "%";
+    if(rms > 0.012){ heard = true; lastLoud = now; }
     if($("handsFree").checked && heard && now - lastLoud > 1300) wFinish();
     else if(!heard && now - t0 > 9000){ wFinish(); }
     else if(now - t0 > 30000) wFinish();
@@ -723,7 +725,7 @@ async function wStart(){
 async function wFinish(cancel){
   const r = wRec; if(!r) return; wRec = null; wRelease();
   if(cancel){ wSetUI("idle"); return; }
-  if(!r.heard){ wSetUI("idle"); micMsg("Didn't hear anything. Tap Talk and speak a little louder."); return; }
+  if(!r.heard){ wSetUI("idle"); micMsg("No sound came through your microphone. Check that your computer or phone is using the right mic (and it isn't muted), then tap Talk."); return; }
   wSetUI("busy"); micMsg("Turning your words into text…");
   try{
     const asr = await loadASR(p => micMsg(`Loading speech recognition: ${p}% (one-time download)`));
@@ -734,7 +736,7 @@ async function wFinish(cancel){
     micMsg("");
     const cur = $("input").value.trim(); $("input").value = cur ? cur + " " + text : text;
     if($("handsFree").checked && !$("input").disabled){ lastFromMic = true; send(); }
-  }catch(e){ wSetUI("idle"); micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type."); }
+  }catch(e){ wSetUI("idle"); if(SR && !IOS){ asrFailed = true; micMsg("Built-in speech recognition couldn't load, so the browser's voice input is used instead. Tap Talk again."); } else micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type."); }
 }
 function wToggle(){ if(wRec) wFinish(false); else { lastFromMic = true; wStart(); } }
 function toggleMic(){
@@ -864,7 +866,7 @@ async function naturalSpeak(text, done){
 function unlockTTS(){ unlockAudio(); try{ if(window.__ttsUnlocked || !window.speechSynthesis || !$("voice").checked) return; const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); window.__ttsUnlocked = true; }catch(e){} }
 function startCall(){ unlockTTS(); if(useNatural()) piperLoad(persona.id).catch(()=>{}); if(useWhisperMic() && !inClaude) setTimeout(()=>loadASR().catch(()=>{}), 1500);
   st = newState(); turns = []; $("log").innerHTML = ""; $("score").hidden = true;
-  $("who").innerHTML = `<b>${esc(persona.name)}</b><div>${esc(persona.title)} · ${esc(persona.company)}</div>`;
+  $("who").innerHTML = `<b>${esc(persona.name)}</b><div>${esc(persona.company.replace(/\s*\(.*\)$/,""))}</div>`;
   $("input").placeholder = "Say your line…"; setStatus("live","On call"); $("setup").hidden = true; $("startBtn").textContent = "New call"; $("endBtn").disabled = false;
   addMsg("sys","Ring… ring… they picked up.");
   const g = pick(persona.lines.pickup); /* greeting stays as written */ turns.push({who:"prospect",text:g}); addMsg("prospect", g); speak(g);
