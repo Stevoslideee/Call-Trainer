@@ -386,7 +386,7 @@ function analyze(text){
   const isQ = /\?|\b(what|how|which|any|where|have you|are you|do you|would you|could you)\b/.test(t);
   return {
     t, isQ, words: t.split(/\s+/).filter(Boolean).length,
-    intro: {abstrakt:has(/abstra[ck]t/), recorded:has(/recorded/), client: f.client.length>1 && t.includes(f.client.toLowerCase()), reinvent:has(/re:? ?invent/)},
+    intro: {abstrakt:has(/abstra[ck]t|abstract|a ?strap|ab ?stract|ab ?strat|abstrak/), recorded:has(/recorded|record(ing)? line/), client: f.client.length>1 && t.replace(/[\s.\-]+/g,"").includes(f.client.toLowerCase().replace(/[\s.\-]+/g,"")), reinvent:has(/re[:\- ]?invent/)},
     approach: has(/\b(ai|a\.i\.|artificial intelligence|chatgpt|gpt|copilot)\b/) && has(/currently|right now|today|how are you|what are you|are you (using|doing|leverag)|using|leverag|doing with/) && isQ,
     issues: has(/bottleneck|challeng|pain point|struggl|problem|issue|frustrat|hardest|slow(s|ing)? (you|things)|headache|roadblock|keeping you up/) && isQ,
     ackWords: has(/got it|appreciate|makes sense|i understand|understood|thanks for sharing|thank you for sharing|good to hear|glad to hear|great to hear|sounds like|that's (tough|frustrating|great|good|a lot)|i hear you|that must|so (you|your|the|it)/),
@@ -395,7 +395,7 @@ function analyze(text){
     capCount: [/find(ing)? (and use )?(information|info|answers)|find and use|search|knowledge/, /repetitive|manual work|automat|busywork|save (time|hours)|routine/, /products? (and|&) services|build(ing)? ai into|into (the|your) products?|your customers/].filter(r=>r.test(t)).length,
     emailAsk: has(/e-?mail/) && (isQ || has(/send/)),
     curiousAsk: has(/most curious|curious to (learn|hear|know)|most interest|learn more|stood out|resonat|jump(ed|s)? out|most useful/),
-    recommend: has(/recommend|suggest|get(ting)? you (connected|in front|a meeting|some time|time)|connect you with|sit down with|meet with|set you up|set up a (meeting|time|call)|grab (some )?time|book (a|some|you)/) && has(/re:? ?invent|team|meeting|them|they|conversation/),
+    recommend: has(/recommend|suggest|get(ting)? you (connected|in front|a meeting|some time|time)|connect you with|sit down with|meet with|set you up|set up a (meeting|time|call)|grab (some )?time|book (a|some|you)/) && has(/re[:\- ]?invent|team|meeting|them|they|conversation/),
     days: daysIn(t), times: timesIn(text), ampmAsk: has(/morning|afternoon/),
     scheduleAsk: has(/what (day|time)|which (day|time|works|one)|availab|when (are|would|could|is)|open (on|slot)/),
     confirm: has(/got you down|i've got you|i have you (down|for)|confirm|lock(ed)? (you|it|that) in|send (you )?(the|an|a calendar) invit|calendar invite|accept the invit|you're booked|booked you|put you down/),
