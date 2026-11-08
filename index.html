@@ -588,7 +588,7 @@ function addMsg(who, text){
   const t = document.createElement("span"); t.textContent = text; d.append(t);
   $("log").append(d); $("log").scrollTop = $("log").scrollHeight; return t;
 }
-function setStatus(s, label){ status = s; const el=$("status"); el.className = "status " + ({live:"live",booked:"booked",ended:"ended"}[s]||""); el.textContent = label; }
+function setStatus(s, label){ status = s; if(s !== "live"){ try{ wRec = null; wCloseAll(); wSetUI("idle"); }catch(e){} } const el=$("status"); el.className = "status " + ({live:"live",booked:"booked",ended:"ended"}[s]||""); el.textContent = label; }
 function setInput(on){ $("input").disabled = !on; $("sendBtn").disabled = !on; $("micBtn").disabled = !on; if(!on) stopMic(true); }
 /* ---------- Voice personalities (browser text-to-speech, no credits) ---------- */
 const VOICE = {
@@ -683,7 +683,9 @@ function loadASR(onProg){
   })().catch(e=>{ asrP = null; throw e; }));
 }
 function wSetUI(state){ const lv = $("micLevel"); if(lv){ lv.hidden = state !== "rec"; lv.firstChild.style.width = "0%"; } const b = $("micBtn"); b.setAttribute("aria-pressed", String(state === "rec")); $("micLbl").textContent = state === "rec" ? "Listening…" : state === "busy" ? "Working…" : "Talk"; }
-function wRelease(){ try{ wNode && wNode.disconnect(); }catch(e){} try{ wSrc && wSrc.disconnect(); }catch(e){} try{ wStream && wStream.getTracks().forEach(t=>t.stop()); }catch(e){} wNode = wSrc = wStream = null; }
+function wCloseAll(){ try{ wNode && wNode.disconnect(); }catch(e){} try{ wSrc && wSrc.disconnect(); }catch(e){} try{ wStream && wStream.getTracks().forEach(t=>t.stop()); }catch(e){} wNode = wSrc = wStream = null; }
+// On computers the mic stays open for the whole call, so the next turn starts instantly and no words are lost. iPhone releases it each turn so call audio stays on the loudspeaker.
+function wRelease(){ if(IOS || status !== "live") wCloseAll(); }
 function resample16k(chunks, inRate){
   let n = 0; chunks.forEach(c => n += c.length); const all = new Float32Array(n); let o = 0; chunks.forEach(c => { all.set(c, o); o += c.length; });
   if(inRate === 16000) return all;
@@ -714,46 +716,51 @@ function fixTerms(t){
     .replace(/\bchat\s?g\.?\s?p\.?\s?t\.?\b/gi, "ChatGPT")
     .replace(/\bA\.I\./g, "AI").replace(/\bA\.I\b/g, "AI");
 }
+function wProcess(ev){
+  const r = wRec; if(!r) return;
+  const d = ev.inputBuffer.getChannelData(0); r.chunks.push(new Float32Array(d));
+  let s = 0; for(let i = 0; i < d.length; i += 4) s += d[i] * d[i]; const rms = Math.sqrt(s / (d.length / 4));
+  const now = performance.now(); const lv = $("micLevel"); if(lv) lv.firstChild.style.width = Math.min(100, Math.round(rms * 900)) + "%";
+  r.frames++; r.ring.push(rms); if(r.ring.length > 30) r.ring.shift();
+  if(r.frames <= 3) r.noise = r.noise < 0 ? rms : Math.min(r.noise, rms); else r.noise = Math.min.apply(null, r.ring);
+  const thr = Math.max(0.01, r.noise * 2.5 + 0.003);
+  if(rms > r.maxRms) r.maxRms = rms;
+  if(r.frames > 3 && rms > thr){ r.loud++; r.lastLoud = now; if(!r.heard && r.loud >= 4){ r.heard = true; r.speechStart = now; } }
+  else if(!r.heard && now - r.lastLoud > 500) r.loud = 0;
+  if($("handsFree").checked && r.heard && now - r.lastLoud > 1700) wFinish();
+  else if(!r.heard && now - r.t0 > 20000) wFinish();
+  else if(r.heard && now - r.speechStart > 28000) wFinish();
+  else if(now - r.t0 > 35000) wFinish();
+}
+async function wOpenStream(){
+  if(wStream && wStream.active && wNode) return;
+  wCloseAll();
+  wStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+  wSrc = wCtx.createMediaStreamSource(wStream);
+  wNode = wCtx.createScriptProcessor(4096, 1, 1); wNode.onaudioprocess = wProcess;
+  wSrc.connect(wNode); wNode.connect(wCtx.destination);
+}
 async function wStart(){
-  if(wRec || wStarting || $("input").disabled) return;
+  if(wRec || wStarting) return;
+  if($("input").disabled){ if(typing) micMsg("Let them finish answering, then tap Talk."); return; }
   try{ speechSynthesis.cancel(); }catch(e){} stopNatural();
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ micMsg("This browser can't use the microphone. Use the mic on your keyboard, or type."); return; }
   const ready = loadASR(p => micMsg(`Getting speech recognition ready: ${p}% (one-time download)`)); ready.catch(()=>{}); wStarting = true;
   try{
     if(!wCtx) wCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(wCtx.state === "suspended") await wCtx.resume();
-    wStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    await wOpenStream();
   }catch(e){
-    wStarting = false; wRelease(); wSetUI("idle");
-    micMsg(e && e.name === "NotAllowedError" ? (IOS ? "Safari blocked the microphone. Tap \"aA\" in the address bar → Website Settings → Microphone → Allow, then tap Talk." : "The microphone is blocked. Allow it for this site (icon left of the address bar), then tap Talk.") : "Couldn't open the microphone. Tap Talk to try again, or use your keyboard's mic.");
+    wStarting = false; wCloseAll(); wSetUI("idle");
+    micMsg(e && e.name === "NotAllowedError" ? (IOS ? "Safari blocked the microphone. Tap \"aA\" in the address bar \u2192 Website Settings \u2192 Microphone \u2192 Allow, then tap Talk." : "The microphone is blocked. Allow it for this site (icon left of the address bar), then tap Talk.") : "Couldn't open the microphone. Tap Talk to try again, or use your keyboard's mic.");
     return;
   }
-  if(!asrReady){ wSetUI("busy"); micMsg("Getting speech recognition ready…"); }
-  try{ await ready; asrReady = true; }catch(e){ wStarting = false; wRelease(); wSetUI("idle"); if(SR && !IOS){ asrFailed = true; micMsg("Built-in speech recognition couldn't load, so the browser's voice input is used instead. Tap Talk again."); } else micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type."); return; }
+  if(!asrReady){ wSetUI("busy"); micMsg("Getting speech recognition ready\u2026"); }
+  try{ await ready; asrReady = true; }catch(e){ wStarting = false; wCloseAll(); wSetUI("idle"); if(SR && !IOS){ asrFailed = true; micMsg("Built-in speech recognition couldn't load, so the browser's voice input is used instead. Tap Talk again."); } else micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type."); return; }
   wStarting = false;
   if($("input").disabled || status !== "live" || !wStream){ wRelease(); wSetUI("idle"); return; }
-  const chunks = [], rate = wCtx.sampleRate; let heard = false, lastLoud = 0, noise = -1, frames = 0, speechStart = 0, ring = [], loud = 0, maxRms = 0; const t0 = performance.now();
-  wSrc = wCtx.createMediaStreamSource(wStream);
-  wNode = wCtx.createScriptProcessor(4096, 1, 1);
-  wNode.onaudioprocess = ev => {
-    if(!wRec) return;
-    const d = ev.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d));
-    let s = 0; for(let i = 0; i < d.length; i += 4) s += d[i] * d[i]; const rms = Math.sqrt(s / (d.length / 4));
-    const now = performance.now(); const lv = $("micLevel"); if(lv) lv.firstChild.style.width = Math.min(100, Math.round(rms * 900)) + "%";
-    frames++; ring.push(rms); if(ring.length > 30) ring.shift();
-    if(frames <= 3) noise = noise < 0 ? rms : Math.min(noise, rms); else noise = Math.min.apply(null, ring);
-    const thr = Math.max(0.01, noise * 2.5 + 0.003);
-    if(rms > maxRms) maxRms = rms;
-    if(frames > 3 && rms > thr){ loud++; lastLoud = now; if(!heard && loud >= 4){ heard = true; speechStart = now; } }
-    else if(!heard && now - lastLoud > 500) loud = 0;
-    if($("handsFree").checked && heard && now - lastLoud > 1600) wFinish();
-    else if(!heard && now - t0 > 20000) wFinish();
-    else if(heard && now - speechStart > 25000) wFinish();
-    else if(now - t0 > 32000) wFinish();
-  };
-  wSrc.connect(wNode); wNode.connect(wCtx.destination);
-  wRec = { chunks, rate, get heard(){ return heard; }, get maxRms(){ return maxRms; } };
-  wSetUI("rec"); micMsg($("handsFree").checked ? "Listening… say your line, then pause. (Or tap Talk when you're done.)" : "Listening… tap Talk when you're done.");
+  wRec = { chunks: [], rate: wCtx.sampleRate, heard: false, lastLoud: 0, noise: -1, frames: 0, speechStart: 0, ring: [], loud: 0, maxRms: 0, t0: performance.now() };
+  wSetUI("rec"); micMsg($("handsFree").checked ? "Listening\u2026 say your line, then pause. (Or tap Talk when you're done.)" : "Listening\u2026 tap Talk when you're done.");
 }
 async function wFinish(cancel){
   const r = wRec; if(!r) return; wRec = null; wRelease();
@@ -781,14 +788,14 @@ function toggleMic(){
   if(listening){ stopMic(false); if(!$("handsFree").checked){ /* manual mode: leave text for review */ } }
   else { lastFromMic = true; startMic(); }
 }
-function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled){ if(useWhisperMic()) setTimeout(()=>{ if(status === "live" && !$("input").disabled) wStart(); }, 400); else startMic(); } }
+function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled){ if(useWhisperMic()) setTimeout(()=>{ if(status === "live" && !$("input").disabled) wStart(); }, IOS ? 400 : 150); else startMic(); } }
 $("micBtn").onclick = ()=>{ unlockTTS(); toggleMic(); };
 try{ const nv = localStorage.getItem("ct_natural"); if(nv !== null) $("natural").checked = nv === "1"; }catch(e){}
 $("deviceVoiceRow").hidden = $("natural").checked;
 $("natural").onchange = e=>{ natFailed = false; $("deviceVoiceRow").hidden = e.target.checked; try{ localStorage.setItem("ct_natural", e.target.checked ? "1" : "0"); }catch(err){} };
 $("voicePick").onchange = e=>{ try{ localStorage.setItem("ct_voice_"+persona.id, e.target.value); }catch(err){} };
 $("voiceTest").onclick = ()=>{ unlockTTS(); const was = $("voice").checked; $("voice").checked = true; speak(pick(persona.lines.pickup) + " " + pick(persona.lines.aiUse)); $("voice").checked = was; };
-document.addEventListener("keydown", e => { if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="m" && SR && status==="live"){ e.preventDefault(); toggleMic(); } });
+document.addEventListener("keydown", e => { if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="m" && status==="live"){ e.preventDefault(); toggleMic(); } });
 const inClaude = (()=>{ try{ return window.top !== window.self; }catch(e){ return true; } })();
 const NO_MIC_MSG = inClaude
   ? "Voice doesn't work inside Claude. Open the downloaded index.html in Chrome or Edge to talk instead of type."
