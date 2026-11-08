@@ -161,7 +161,8 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
       </div>
       <label class="chk"><input type="checkbox" id="hideScript"> Hide script lines (practice from memory)</label>
       <label class="chk"><input type="checkbox" id="voice" checked> Prospects talk out loud <span style="color:var(--muted);font-size:12px">(iPhone: turn off silent mode and turn up the volume)</span></label>
-      <div class="row" style="gap:8px;align-items:flex-end"><label class="f" style="min-width:220px">Voice for this prospect (★ = natural-sounding)<select id="voicePick" style="border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:7px 9px;font-size:14px;color:var(--ink)"></select></label><button class="btn" id="voiceTest" type="button">Preview</button></div>
+      <label class="chk"><input type="checkbox" id="natural" checked> Natural AI voices (free, same on every device; the first call with each prospect downloads about 80 MB)</label>
+      <div class="row" id="deviceVoiceRow" style="gap:8px;align-items:flex-end"><label class="f" style="min-width:220px">Device voice for this prospect (★ = natural-sounding)<select id="voicePick" style="border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:7px 9px;font-size:14px;color:var(--ink)"></select></label><button class="btn" id="voiceTest" type="button">Preview</button></div>
       <label class="chk" id="handsFreeWrap"><input type="checkbox" id="handsFree" checked> Hands-free mic (sends when you pause, then listens again)</label>
     </div>
     <details class="fields">
@@ -623,7 +624,7 @@ function withPersonality(text){
   return text;
 }
 function speak(text, done){
-  try{ if(!$("voice").checked || !window.speechSynthesis) return false;
+  try{ if(!$("voice").checked) return false; if(useNatural()){ naturalSpeak(text, done); return true; } if(!window.speechSynthesis) return false;
     if(speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel(); try{ speechSynthesis.resume(); }catch(e){} const cfg = VOICE[persona.id];
     const spoken = text.replace(/—/g,", ").replace(/\.\.\.|…/g,", ").replace(/([\w.]+)@([\w.]+)/g,(m,a,b)=>a.replace(/\./g," dot ")+" at "+b.replace(/\./g," dot "));
     const u = new SpeechSynthesisUtterance(spoken);
@@ -640,7 +641,7 @@ function micMsg(t){ $("micMsg").hidden = !t; $("micMsg").textContent = t || ""; 
 function setMicUI(){ const b=$("micBtn"); b.setAttribute("aria-pressed", String(listening)); $("micLbl").textContent = listening ? "Listening…" : "Talk"; b.setAttribute("aria-label", listening ? "Stop listening" : "Speak your line"); }
 function startMic(){
   if(!SR || listening || micBlocked || $("input").disabled) return;
-  try{ speechSynthesis.cancel(); }catch(e){}
+  try{ speechSynthesis.cancel(); }catch(e){} stopNatural();
   micMsg("");
   rec = new SR(); rec.lang = "en-US"; rec.interimResults = true; rec.continuous = true;
   micBase = $("input").value.trim() ? $("input").value.trim() + " " : "";
@@ -672,6 +673,9 @@ function toggleMic(){
 }
 function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled) startMic(); }
 $("micBtn").onclick = ()=>{ unlockTTS(); toggleMic(); };
+try{ const nv = localStorage.getItem("ct_natural"); if(nv !== null) $("natural").checked = nv === "1"; }catch(e){}
+$("deviceVoiceRow").hidden = $("natural").checked;
+$("natural").onchange = e=>{ natFailed = false; $("deviceVoiceRow").hidden = e.target.checked; try{ localStorage.setItem("ct_natural", e.target.checked ? "1" : "0"); }catch(err){} };
 $("voicePick").onchange = e=>{ try{ localStorage.setItem("ct_voice_"+persona.id, e.target.value); }catch(err){} };
 $("voiceTest").onclick = ()=>{ unlockTTS(); const was = $("voice").checked; $("voice").checked = true; speak(pick(persona.lines.pickup) + " " + pick(persona.lines.aiUse)); $("voice").checked = was; };
 document.addEventListener("keydown", e => { if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="m" && SR && status==="live"){ e.preventDefault(); toggleMic(); } });
@@ -681,8 +685,89 @@ const NO_MIC_MSG = inClaude
   : "This browser can't turn speech into text. Open this page in Chrome, Edge or Safari to use the mic.";
 if(!SR || inClaude){ $("handsFree").disabled = true; $("handsFreeWrap").title = NO_MIC_MSG; }
 
-function unlockTTS(){ try{ if(window.__ttsUnlocked || !window.speechSynthesis || !$("voice").checked) return; const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); window.__ttsUnlocked = true; }catch(e){} }
-function startCall(){ unlockTTS();
+/* ---------- Natural AI voices (Piper, runs in the browser, free) ---------- */
+const PIPER = { hf:"https://huggingface.co/diffusionstudio/piper-voices/resolve/main/", ort:"https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.18.0/", ph:"https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize" };
+const PVOICE = { dana:"en/en_US/amy/medium/en_US-amy-medium.onnx", priya:"en/en_US/lessac/medium/en_US-lessac-medium.onnx", marcus:"en/en_US/ryan/medium/en_US-ryan-medium.onnx", tom:"en/en_US/joe/medium/en_US-joe-medium.onnx" };
+const PSPEED = { dana:0.92, priya:0.84, marcus:1.08, tom:1.06 };
+let natFailed = false, natGen = 0, natAudio = null; const natLoads = {}; const scriptLoads = {};
+function useNatural(){ return !!($("natural") && $("natural").checked) && !natFailed && typeof WebAssembly === "object"; }
+function loadScript(src){ return scriptLoads[src] || (scriptLoads[src] = new Promise((res, rej)=>{ const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = ()=>{ delete scriptLoads[src]; rej(new Error("script " + src)); }; document.head.append(s); })); }
+async function cachedBytes(url, onProg){
+  let c = null; try{ c = await caches.open("ct-voices-v1"); const hit = await c.match(url); if(hit) return await hit.arrayBuffer(); }catch(e){ c = null; }
+  const res = await fetch(url); if(!res.ok) throw new Error("HTTP " + res.status);
+  const total = +res.headers.get("content-length") || 0; let buf;
+  if(res.body && res.body.getReader){ const r = res.body.getReader(), parts = []; let got = 0; for(;;){ const {done, value} = await r.read(); if(done) break; parts.push(value); got += value.length; if(onProg && total) onProg(Math.min(99, Math.round(got/total*100))); } buf = await new Blob(parts).arrayBuffer(); }
+  else buf = await res.arrayBuffer();
+  try{ if(c) await c.put(url, new Response(buf.slice(0))); }catch(e){}
+  return buf;
+}
+function piperLoad(id, onProg){
+  return natLoads[id] || (natLoads[id] = (async()=>{
+    await Promise.all([loadScript(PIPER.ort + "ort.min.js"), loadScript(PIPER.ph + ".js")]);
+    ort.env.wasm.wasmPaths = PIPER.ort; ort.env.wasm.numThreads = 1;
+    const path = PVOICE[id];
+    const cfg = JSON.parse(new TextDecoder().decode(await cachedBytes(PIPER.hf + path + ".json")));
+    const model = await cachedBytes(PIPER.hf + path, onProg);
+    const session = await ort.InferenceSession.create(model, { executionProviders:["wasm"] });
+    return { session, cfg };
+  })().catch(e=>{ delete natLoads[id]; throw e; }));
+}
+function phonemize(text, cfg){
+  return new Promise((resolve, reject)=>{
+    const t = setTimeout(()=>reject(new Error("phonemize timeout")), 30000);
+    createPiperPhonemize({ print: d=>{ try{ const ids = JSON.parse(d).phoneme_ids; clearTimeout(t); resolve(ids); }catch(e){} }, printErr: ()=>{},
+      locateFile: u => u.endsWith(".wasm") ? PIPER.ph + ".wasm" : u.endsWith(".data") ? PIPER.ph + ".data" : u })
+    .then(m => m.callMain(["-l", cfg.espeak.voice, "--input", JSON.stringify([{ text }]), "--espeak_data", "/espeak-ng-data"]))
+    .catch(e=>{ clearTimeout(t); reject(e); });
+  });
+}
+async function piperSynth(id, text, onProg){
+  const { session, cfg } = await piperLoad(id, onProg);
+  const ids = await phonemize(text, cfg);
+  const inf = cfg.inference || {};
+  const feeds = {
+    input: new ort.Tensor("int64", BigInt64Array.from(ids.map(n=>BigInt(n))), [1, ids.length]),
+    input_lengths: new ort.Tensor("int64", BigInt64Array.from([BigInt(ids.length)]), [1]),
+    scales: new ort.Tensor("float32", Float32Array.from([inf.noise_scale ?? 0.667, (inf.length_scale ?? 1) * (PSPEED[id] || 1), inf.noise_w ?? 0.8]), [3])
+  };
+  if(cfg.speaker_id_map && Object.keys(cfg.speaker_id_map).length) feeds.sid = new ort.Tensor("int64", BigInt64Array.from([0n]), [1]);
+  const out = await session.run(feeds);
+  return { pcm: out.output.data, rate: cfg.audio.sample_rate };
+}
+function toWav(pcm, rate){
+  const v = new DataView(new ArrayBuffer(44 + pcm.length*2)); const w = (o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+  w(0,"RIFF"); v.setUint32(4, 36 + pcm.length*2, true); w(8,"WAVE"); w(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,"data"); v.setUint32(40,pcm.length*2,true);
+  for(let i=0;i<pcm.length;i++){ const s = Math.max(-1, Math.min(1, pcm[i])); v.setInt16(44+i*2, s<0 ? s*32768 : s*32767, true); }
+  return v.buffer;
+}
+function natPlayer(){ if(!natAudio){ natAudio = new Audio(); natAudio.preload = "auto"; natAudio.setAttribute("playsinline", ""); } return natAudio; }
+function unlockAudio(){ try{ if(window.__audioUnlocked) return; const a = natPlayer(); a.src = URL.createObjectURL(new Blob([toWav(new Float32Array(2205), 22050)], {type:"audio/wav"})); a.play().then(()=>{ window.__audioUnlocked = true; }).catch(()=>{}); }catch(e){} }
+function stopNatural(){ natGen++; try{ if(natAudio){ natAudio.pause(); } }catch(e){} }
+async function naturalSpeak(text, done){
+  const my = ++natGen, id = persona.id; let finished = false; const fin = ()=>{ if(!finished){ finished = true; if(my === natGen && done) done(); } };
+  try{ if(natAudio) natAudio.pause(); }catch(e){}
+  const spoken = text.replace(/—/g,", ").replace(/\.\.\.|…/g,", ").replace(/([\w.]+)@([\w.]+)/g,(m,a,b)=>a.replace(/\./g," dot ")+" at "+b.replace(/\./g," dot "));
+  let loading = 0;
+  try{
+    let shown = false; loading = setTimeout(()=>{ shown = true; micMsg(`Loading ${persona.name.split(" ")[0]}'s natural voice (one-time download)…`); }, 600);
+    const { pcm, rate } = await piperSynth(id, spoken, p => { shown = true; micMsg(`Loading ${persona.name.split(" ")[0]}'s natural voice: ${p}% (one-time download)`); });
+    clearTimeout(loading); if(shown) micMsg("");
+    if(my !== natGen) return;
+    const a = natPlayer(), url = URL.createObjectURL(new Blob([toWav(pcm, rate)], {type:"audio/wav"}));
+    a.onended = ()=>{ URL.revokeObjectURL(url); fin(); }; a.onerror = fin; a.src = url;
+    setTimeout(fin, pcm.length / rate * 1000 + 3000);
+    await a.play().catch(()=>{ micMsg("Tap Talk or Send once so your browser lets the prospect speak."); fin(); });
+  }catch(e){
+    clearTimeout(loading);
+    if(my !== natGen) return;
+    natFailed = true; micMsg("The natural voice couldn't load on this device, so the device voice is used instead.");
+    if(!speak(text, done)) fin();
+  }
+}
+
+function unlockTTS(){ unlockAudio(); try{ if(window.__ttsUnlocked || !window.speechSynthesis || !$("voice").checked) return; const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); window.__ttsUnlocked = true; }catch(e){} }
+function startCall(){ unlockTTS(); if(useNatural()) piperLoad(persona.id).catch(()=>{});
   st = newState(); turns = []; $("log").innerHTML = ""; $("score").hidden = true;
   $("who").innerHTML = `<b>${esc(persona.name)}</b><div>${esc(persona.title)} · ${esc(persona.company)}</div>`;
   $("input").placeholder = "Say your line…"; setStatus("live","On call"); $("setup").hidden = true; $("startBtn").textContent = "New call"; $("endBtn").disabled = false;
@@ -696,7 +781,7 @@ $("startBtn").onclick = ()=> status==="idle" ? startCall() : backToSetup();
 function send(){
   const text = $("input").value.trim();
   if(typing && Date.now() - (window.__typingAt||0) > 5000) typing = false; if(!text || typing || status!=="live") return; window.__typingAt = Date.now();
-  stopMic(true); $("input").value = ""; turns.push({who:"rep",text}); addMsg("rep", text);
+  stopMic(true); stopNatural(); $("input").value = ""; turns.push({who:"rep",text}); addMsg("rep", text);
   const r = prospectReply(text); r.text = withPersonality(r.text);
   typing = true; setInput(false);
   const bubble = addMsg("prospect","…");
@@ -718,7 +803,7 @@ $("input").addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ 
 
 function endCall(){
   if(!st || st.repTurn===0){ backToSetup(); return; }
-  try{speechSynthesis.cancel()}catch(e){}
+  try{speechSynthesis.cancel()}catch(e){} stopNatural();
   if(status==="live") setStatus("ended","Call ended");
   setInput(false); $("endBtn").disabled = true; $("endBtn").textContent = "End call & score";
   const s = scoreCall(), c = persona.card, sc = $("score");
