@@ -407,7 +407,7 @@ function analyze(text){
 let persona = PERSONAS[0], difficulty = "normal", status = "idle", turns = [], st = null, typing = false;
 function newState(){
   return { aiUse:false, issue:false, looked:false, email:false, curious:false, agreed:false,
-    objections: {easy:0, normal:1, tough:2}[difficulty], patience: {easy:99, normal:4, tough:2}[difficulty],
+    objections: {easy:0, normal:1, tough:2}[difficulty], patience: {easy:99, normal:7, tough:3}[difficulty],
     day:null, ampm:null, time:null, booked:false, ended:false, lastWas:"pickup",
     hits:{}, repTurn:0, intro:{abstrakt:false, recorded:false, client:false, reinvent:false},
     recSpecific:null, recBeforeIssue:false, offeredChoice:false, confirmDetails:null, offRoute:0, longTurns:0, coach:"" };
@@ -685,7 +685,7 @@ function unlockTTS(){ try{ if(window.__ttsUnlocked || !window.speechSynthesis ||
 function startCall(){ unlockTTS();
   st = newState(); turns = []; $("log").innerHTML = ""; $("score").hidden = true;
   $("who").innerHTML = `<b>${esc(persona.name)}</b><div>${esc(persona.title)} · ${esc(persona.company)}</div>`;
-  setStatus("live","On call"); $("setup").hidden = true; $("startBtn").textContent = "New call"; $("endBtn").disabled = false;
+  $("input").placeholder = "Say your line…"; setStatus("live","On call"); $("setup").hidden = true; $("startBtn").textContent = "New call"; $("endBtn").disabled = false;
   addMsg("sys","Ring… ring… they picked up.");
   const g = pick(persona.lines.pickup); /* greeting stays as written */ turns.push({who:"prospect",text:g}); addMsg("prospect", g); speak(g);
   setInput(true); renderRoute(); $("input").focus();
@@ -695,7 +695,7 @@ $("startBtn").onclick = ()=> status==="idle" ? startCall() : backToSetup();
 
 function send(){
   const text = $("input").value.trim();
-  if(!text || typing || status!=="live") return;
+  if(typing && Date.now() - (window.__typingAt||0) > 5000) typing = false; if(!text || typing || status!=="live") return; window.__typingAt = Date.now();
   stopMic(true); $("input").value = ""; turns.push({who:"rep",text}); addMsg("rep", text);
   const r = prospectReply(text); r.text = withPersonality(r.text);
   typing = true; setInput(false);
@@ -704,14 +704,16 @@ function send(){
   setTimeout(()=>{
     bubble.textContent = r.text; turns.push({who:"prospect",text:r.text}); typing = false;
     const ongoing = !r.outcome;
-    if(r.outcome==="booked"){ setStatus("booked","Booked"); addMsg("sys","Meeting booked. End the call to see your score."); $("endBtn").textContent = "See my score"; }
-    else if(r.outcome==="ended"){ setStatus("ended","Hung up"); addMsg("sys","The prospect ended the call. End the call to see your score."); $("endBtn").textContent = "See my score"; }
+    if(r.outcome==="booked"){ setStatus("booked","Booked"); addMsg("sys","Meeting booked! The call is over."); $("endBtn").textContent = "See my score"; callOverActions(); }
+    else if(r.outcome==="ended"){ setStatus("ended","Hung up"); addMsg("sys","The prospect hung up. The call is over."); $("endBtn").textContent = "See my score"; callOverActions(); }
     else { setInput(true); $("input").focus(); }
     if(!speak(r.text, ongoing ? listenAgain : null) && ongoing) listenAgain();
     renderRoute();
   }, delay);
 }
 $("sendBtn").onclick = ()=>{ unlockTTS(); lastFromMic = false; send(); };
+function callOverActions(){ try{ stopMic(true); }catch(e){} $("input").placeholder = "Call over. Tap See my score or Call again."; const d = document.createElement("div"); d.className = "msg sys"; d.innerHTML = '<span class="actions" style="justify-content:center"><button class="btn primary" type="button" data-a="score">See my score</button><button class="btn" type="button" data-a="again">Call again</button></span>'; d.querySelector('[data-a=score]').onclick = endCall; d.querySelector('[data-a=again]').onclick = startCall; $("log").append(d); $("log").scrollTop = $("log").scrollHeight; }
+$("input").addEventListener("pointerdown", ()=>{ if(listening){ stopMic(true); micMsg("Mic paused so you can type. Tap Talk to speak again."); } });
 $("input").addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); lastFromMic = false; send(); } });
 
 function endCall(){
