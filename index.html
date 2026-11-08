@@ -393,7 +393,7 @@ function analyze(text){
     creed: has(/openai|open ai|\baws\b|amazon/) && has(/arrang|reaching out|conversations? with|meetings? with|the team|their team/),
     resources: has(/resources|looked into|look into|looking into|explored|research|evaluat|considered|tried|checked out/) && isQ,
     capCount: [/find(ing)? (and use )?(information|info|answers)|find and use|search|knowledge/, /repetitive|manual work|automat|busywork|save (time|hours)|routine/, /products? (and|&) services|build(ing)? ai into|into (the|your) products?|your customers/].filter(r=>r.test(t)).length,
-    emailAsk: has(/e-?mail/) && (isQ || has(/send/)),
+    emailAsk: has(/(good|best|right|your|an?|which|what) e-?mail\b|e-?mail address|e-?mail (for me |i can |to )?(send|reach)|where (can|should|do) i send|send (you |it |that |some )?(info|information|details|stuff|something|over)/),
     curiousAsk: has(/most curious|curious to (learn|hear|know)|most interest|learn more|stood out|resonat|jump(ed|s)? out|most useful/),
     recommend: has(/recommend|suggest|get(ting)? you (connected|in front|a meeting|some time|time)|connect you with|sit down with|meet with|set you up|set up a (meeting|time|call)|grab (some )?time|book (a|some|you)/) && has(/re[:\- ]?invent|team|meeting|them|they|conversation/),
     days: daysIn(t), times: timesIn(text), ampmAsk: has(/morning|afternoon/),
