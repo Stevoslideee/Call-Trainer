@@ -157,6 +157,17 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
 @keyframes tapme{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--teal) 45%,transparent)}50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--teal) 0%,transparent)}}
 .btn.mic.pulse{border-color:var(--teal);color:var(--teal);animation:tapme 1.1s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.btn.mic.pulse{animation:none;outline:2px solid var(--teal)}}
+#input.live{color:var(--muted);font-style:italic}
+.miccheck{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px}
+.miccheck .btn{display:inline-flex;align-items:center;gap:8px}
+.miccheck select{max-width:260px;min-width:0;font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:inherit}
+.miccheck .mcbar{flex:1 1 120px;min-width:80px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.miccheck .mcbar i{display:block;height:100%;width:0%;background:var(--good);transition:width .08s}
+.miccheck .mcmsg{flex-basis:100%;font-size:13px;color:var(--muted)}
+.miccheck.good{border-color:var(--good)}.miccheck.good .mcmsg{color:var(--good)}
+.miccheck.warn{border-color:var(--warn)}.miccheck.warn .mcmsg{color:var(--warn)}
+.miccheck.bad{border-color:var(--bad)}.miccheck.bad .mcmsg{color:var(--bad)}
+.miccheck.on .mcbar i{background:var(--teal)}
 </style>
 </head>
 <body>
@@ -195,9 +206,15 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
       </div>
       <label class="chk"><input type="checkbox" id="hideScript"> Hide script lines (practice from memory)</label>
       <label class="chk"><input type="checkbox" id="voice" checked> Prospects talk out loud <span style="color:var(--muted);font-size:12px">(iPhone: turn off silent mode and turn up the volume)</span></label>
-      <input type="checkbox" id="natural" checked hidden>
+      <input type="checkbox" id="natural" checked hidden aria-label="Natural voices">
       <div id="deviceVoiceRow" hidden><select id="voicePick" aria-label="Device voice"></select><button id="voiceTest" type="button">Preview</button></div>
       <label class="chk" id="handsFreeWrap"><input type="checkbox" id="handsFree" checked> Hands-free mic (sends when you pause, then listens again)</label>
+      <div class="miccheck" id="micCheck">
+        <button class="btn" id="mcBtn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="mcLbl">Test my mic</span></button>
+        <select id="micPick" aria-label="Microphone" hidden></select>
+        <div class="mcbar" aria-hidden="true"><i id="mcLevel"></i></div>
+        <div class="mcmsg" id="mcMsg" role="status">Check your mic before you call: tap Test my mic and say a line.</div>
+      </div>
     </div>
     <details class="fields">
       <summary>Call details that fill the script</summary>
@@ -230,7 +247,7 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
       <div class="log" id="log" aria-live="polite"></div>
       <div class="mini" id="mini" hidden><div class="eyebrow">Next: <span id="miniTitle"></span></div><div id="miniLine"></div></div>
       <div class="compose">
-        <textarea id="input" placeholder="Say your line…" disabled></textarea>
+        <textarea id="input" placeholder="Say your line…" aria-label="Your line" disabled></textarea>
         <button class="btn mic" id="micBtn" type="button" aria-pressed="false" aria-label="Speak your line" title="Speak your line" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="micLbl">Talk</span></button>
         <button class="btn primary" id="sendBtn" disabled>Send</button>
       </div>
@@ -765,7 +782,7 @@ function speak(text, done){
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, listening = false, micBase = "", silenceTimer = null, lastFromMic = false, micBlocked = false;
 const COARSE = matchMedia("(pointer: coarse)").matches;
-function setHint(){ $("hint").textContent = COARSE ? "Tap Talk and speak, or type and tap Send. Stick close to the script wording." : "Tap Talk (or Ctrl+M) to speak · Enter sends · Shift+Enter for a new line · Stick close to the script wording"; }
+function setHint(){ $("hint").textContent = COARSE ? "Tap Talk and speak, or type and tap Send. Stick close to the script wording." : "Tap Talk, or hold Space to talk · Enter sends · Shift+Enter for a new line · Stick close to the script wording"; }
 function fmtDur(ms){ const s = Math.max(0, Math.round(ms/1000)); return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); }
 let timerId = 0;
 function startTimer(){ clearInterval(timerId); $("timer").hidden = false; $("timer").textContent = "0:00"; timerId = setInterval(()=>{ if(st && status === "live") $("timer").textContent = fmtDur(Date.now() - st.startAt); }, 1000); }
@@ -804,12 +821,16 @@ function startMic(){
 function stopMic(cancel){ if(typeof wRec !== "undefined" && wRec){ wFinish(!!cancel); } clearTimeout(silenceTimer); if(rec && listening){ rec._autoSend = !cancel; try{ cancel ? rec.abort() : rec.stop(); }catch(e){} } if(cancel){ listening = false; setMicUI(); } }
 /* ---------- Built-in speech-to-text (Whisper in the browser) — used on iPhone and wherever the browser's own mic is unreliable ---------- */
 const TFJ = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/transformers.min.js";
+// Model files the site hosts itself (downloaded by Render at build time). Falls back to the public copies if they're missing.
+const LOCAL = (location.protocol.startsWith("http") ? fetch("assets/manifest.json", {cache:"no-cache"}).then(r => r.ok && /json/.test(r.headers.get("content-type") || "") ? r.json() : null) : Promise.resolve(null)).catch(() => null);
 let asrP = null, wCtx = null, wStream = null, wNode = null, wSrc = null, wRec = null, wForce = false;
 let asrFailed = false, asrReady = false, wStarting = false, wEmpty = 0; function useWhisperMic(){ return !asrFailed || !SR; }
 function loadASR(onProg){
   return asrP || (asrP = (async()=>{
     const T = await import(TFJ);
-    T.env.allowLocalModels = false;
+    const m = await LOCAL;
+    if(m && m.asr){ T.env.allowLocalModels = true; T.env.localModelPath = new URL("assets/models/", location.href).href; T.env.allowRemoteModels = true; }
+    else T.env.allowLocalModels = false;
     return await T.pipeline("automatic-speech-recognition", "onnx-community/moonshine-base-ONNX", { dtype: "q8", device: "wasm",
       progress_callback: p => { if(onProg && p && p.status === "progress" && /onnx/.test(p.file || "")) onProg(Math.round(p.progress || 0)); } });
   })().catch(e=>{ asrP = null; throw e; }));
@@ -869,21 +890,23 @@ function wProcess(ev){
   if(rms > r.maxRms) r.maxRms = rms;
   if(r.frames > 3 && rms > thr){ r.loud++; r.lastLoud = now; if(!r.heard && r.loud >= 3){ r.heard = true; r.speechStart = now; } }
   else if(!r.heard && now - r.lastLoud > 500) r.loud = 0;
+  if(r.ptt){ if(now - r.t0 > 60000){ r.byTap = true; wFinish(); } else livePartial(r); return; }
   if($("handsFree").checked && r.heard && now - r.lastLoud > 1700) wFinish();
   else if(!r.heard && now - r.t0 > 20000) wFinish();
   else if(r.heard && now - r.speechStart > 28000) wFinish();
   else if(now - r.t0 > 35000) wFinish();
+  else livePartial(r);
 }
 async function wOpenStream(){
   if(wStream && wStream.active && wNode) return;
   wCloseAll();
-  wStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+  wStream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
   wSrc = wCtx.createMediaStreamSource(wStream);
   wNode = wCtx.createScriptProcessor(4096, 1, 1); wNode.onaudioprocess = wProcess;
   wSrc.connect(wNode); wNode.connect(wCtx.destination);
 }
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("timeout"), {name:"TimeoutError"})), ms))]);
-function wReset(){ try{ srBackupStop(wRec); }catch(e){} wRec = null; wStarting = false; try{ wCloseAll(); }catch(e){} try{ if(wCtx) wCtx.close(); }catch(e){} wCtx = null; }
+function wReset(){ try{ srBackupStop(wRec); liveEnd(wRec); }catch(e){} wRec = null; wStarting = false; try{ wCloseAll(); }catch(e){} try{ if(wCtx) wCtx.close(); }catch(e){} wCtx = null; }
 function needTap(msg){ wSetUI("idle"); micMsg(msg || "Tap Talk to answer."); const b = $("micBtn"); b.classList.add("pulse"); clearTimeout(needTap.t); needTap.t = setTimeout(()=>b.classList.remove("pulse"), 8000); }
 async function wStart(fromTap){
   if(wRec) return;
@@ -911,14 +934,15 @@ async function wStart(fromTap){
   try{ await ready; asrReady = true; }catch(e){ wStarting = false; wCloseAll(); wSetUI("idle"); if(SR && !IOS){ asrFailed = true; micMsg("Built-in speech recognition couldn't load, so the browser's voice input is used instead. Tap Talk again."); } else micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type."); return; }
   wStarting = false;
   if($("input").disabled || status !== "live" || !wStream){ wRelease(); wSetUI("idle"); return; }
-  wRec = { chunks: [], rate: wCtx.sampleRate, heard: false, lastLoud: 0, noise: -1, frames: 0, speechStart: 0, ring: [], loud: 0, maxRms: 0, t0: performance.now() };
+  wRec = { chunks: [], rate: wCtx.sampleRate, heard: false, lastLoud: 0, noise: -1, frames: 0, speechStart: 0, ring: [], loud: 0, maxRms: 0, t0: performance.now(), base: $("input").value, ptt: pttHeld };
   srBackupStart(wRec);
+  if(fromTap && pttHeld === false && pttWanted){ pttWanted = false; const r0 = wRec; r0.byTap = true; setTimeout(() => wFinish(false), 0); }
   wSetUI("rec"); micMsg($("handsFree").checked ? "Listening\u2026 say your line, then pause. (Or tap Talk when you're done.)" : "Listening\u2026 tap Talk when you're done.");
   // If no audio reaches us, don't sit there "listening" to nothing.
   const myRec = wRec; setTimeout(()=>{ if(wRec === myRec && myRec.frames === 0){ wReset(); needTap("Tap Talk to answer."); } }, 1800);
 }
 async function wFinish(cancel){
-  const r = wRec; if(!r) return; wRec = null; srBackupStop(r); wRelease();
+  const r = wRec; if(!r) return; wRec = null; srBackupStop(r); wRelease(); liveEnd(r);
   if(cancel){ wSetUI("idle"); return; }
   const tapped = !!r.byTap, backup = () => fixTerms(srText(r));
   // Tapping Talk to finish always transcribes what was said, even if the level never crossed the speech threshold.
@@ -929,8 +953,8 @@ async function wFinish(cancel){
     const asr = await loadASR(p => micMsg(`Loading speech recognition: ${p}% (one-time download)`));
     const slow = setTimeout(()=>micMsg("Still working… the first time can take a little longer."), 8000);
     const full = await to16k(r.chunks, r.rate), cut = trimSpeech(full);
-    let out = await asr(cut);
-    if(!String(out && out.text || "").trim() && cut !== full) out = await asr(full);
+    let out = await asrRun(asr, cut);
+    if(!String(out && out.text || "").trim() && cut !== full) out = await asrRun(asr, full);
     clearTimeout(slow);
     let text = fixTerms(String(out && out.text || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\s+/g, " ").trim());
     wSetUI("idle");
@@ -961,7 +985,94 @@ function srBackupStart(r){
 }
 function srBackupStop(r){ if(r && r.sr){ const b = r.sr; r.sr = null; b.onend = null; try{ b.stop(); }catch(e){} } }
 function srText(r){ return r ? ((r.srFinal || "") + " " + (r.srInterim || "")).replace(/\s+/g, " ").trim() : ""; }
-function wToggle(){ if(wRec){ if(wRec.frames === 0){ srBackupStop(wRec); wReset(); lastFromMic = true; wStart(true); } else { wRec.byTap = true; wFinish(false); } } else { lastFromMic = true; wStart(true); } }
+// ----- Live words: show what you're saying while you say it -----
+let asrQ = Promise.resolve();
+function asrRun(asr, x){ const p = asrQ.then(() => asr(x)); asrQ = p.catch(() => {}); return p; }
+function liveShow(r, t){ if(wRec !== r || !t) return; const inp = $("input"); inp.value = (r.base ? r.base + " " : "") + t; inp.classList.add("live"); inp.scrollTop = inp.scrollHeight; }
+function liveEnd(r){ const inp = $("input"); if(r && inp.classList.contains("live")) inp.value = r.base || ""; inp.classList.remove("live"); }
+function livePartial(r){
+  const sr = srText(r); if(sr){ liveShow(r, fixTerms(sr)); return; }
+  const now = performance.now();
+  if(!r.heard || r.liveBusy || r.liveSlow || now - (r.liveAt || 0) < 1200 || now - r.speechStart < 700 || !asrReady || !asrP) return;
+  r.liveBusy = true; r.liveAt = now;
+  (async () => {
+    try{
+      const asr = await asrP, t0 = performance.now();
+      const take = []; let n = 0; for(let i = r.chunks.length - 1; i >= 0 && n < r.rate * 20; i--){ take.unshift(r.chunks[i]); n += r.chunks[i].length; }
+      const out = await asrRun(asr, trimSpeech(await to16k(take, r.rate)));
+      if(performance.now() - t0 > 2200) r.liveSlow = true;   // slow device: skip live words, keep the final transcript fast
+      const t = fixTerms(String(out && out.text || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\s+/g, " ").trim());
+      liveShow(r, t);
+    }catch(e){ r.liveSlow = true; }
+    r.liveBusy = false;
+  })();
+}
+// ----- Push-to-talk: hold Space to talk, let go to send -----
+let pttHeld = false, pttWanted = false;
+function pttTarget(e){ const t = e.target, tag = (t && t.tagName) || ""; if(tag === "TEXTAREA") return !t.value.trim(); return !/^(INPUT|SELECT)$/.test(tag) && !(t && t.isContentEditable); }
+document.addEventListener("keydown", e => {
+  if(e.code !== "Space" || e.repeat || e.ctrlKey || e.metaKey || e.altKey || status !== "live" || inClaude || $("input").disabled || !pttTarget(e)) return;
+  if(!useWhisperMic()) return;
+  e.preventDefault(); unlockTTS(); pttHeld = true; pttWanted = true; lastFromMic = true;
+  if(wRec){ wRec.ptt = true; wSetUI("rec"); micMsg("Talking\u2026 let go of Space to send."); }
+  else wStart(true).then(() => { if(wRec && pttHeld){ wRec.ptt = true; micMsg("Talking\u2026 let go of Space to send."); } });
+});
+document.addEventListener("keyup", e => {
+  if(e.code !== "Space" || !pttHeld) return;
+  e.preventDefault(); pttHeld = false;
+  if(wRec){ pttWanted = false; wRec.byTap = true; wFinish(false); }
+});
+// ----- Mic check on the home screen -----
+const MIC_KEY = "ct_mic";
+function micConstraints(){ let id = ""; try{ id = localStorage.getItem(MIC_KEY) || ""; }catch(e){} const c = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }; if(id) c.deviceId = { ideal: id }; return c; }
+async function fillMicList(){
+  try{
+    const list = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput" && d.deviceId);
+    const sel = $("micPick"); if(list.length < 2){ sel.hidden = true; return; }
+    let cur = ""; try{ cur = localStorage.getItem(MIC_KEY) || ""; }catch(e){}
+    sel.innerHTML = list.map((d, i) => `<option value="${d.deviceId}">${esc(d.label || "Microphone " + (i + 1))}</option>`).join("");
+    if(cur && list.some(d => d.deviceId === cur)) sel.value = cur; else if(wStream){ const s = wStream.getAudioTracks()[0]?.getSettings?.().deviceId; if(s) sel.value = s; }
+    sel.hidden = false;
+  }catch(e){}
+}
+let mcRun = null;
+async function micCheck(){
+  if(mcRun){ mcRun.stop = true; return; }
+  const msg = t => { $("mcMsg").textContent = t; }, lvl = $("mcLevel"), run = mcRun = { stop: false };
+  $("mcLbl").textContent = "Stop"; $("micCheck").classList.add("on"); $("micCheck").classList.remove("good", "warn", "bad");
+  let stream = null, ctx = null;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
+    fillMicList();
+    const ready = loadASR(p => { if(!run.stop) msg(`Getting speech recognition ready: ${p}% (one-time download)\u2026 keep talking`); }); ready.catch(() => {});
+    ctx = new (window.AudioContext || window.webkitAudioContext)(); try{ await ctx.resume(); }catch(e){}
+    const src = ctx.createMediaStreamSource(stream), node = ctx.createScriptProcessor(4096, 1, 1), chunks = []; let peak = 0, sum = 0, n = 0;
+    node.onaudioprocess = ev => { const d = ev.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d)); let s = 0; for(let i = 0; i < d.length; i += 4) s += d[i]*d[i]; const rms = Math.sqrt(s / (d.length/4)); peak = Math.max(peak, rms); sum += rms; n++; lvl.style.width = Math.min(100, Math.round(rms * 900)) + "%"; };
+    src.connect(node); node.connect(ctx.destination);
+    const label = stream.getAudioTracks()[0]?.label || "your microphone";
+    msg(`Listening on ${label}. Say: \u201cHi, this is ${$("f_name").value || "Stephen"} from Abstrakt.\u201d`);
+    const t0 = performance.now(); while(!run.stop && performance.now() - t0 < 5000) await new Promise(r => setTimeout(r, 100));
+    node.disconnect(); src.disconnect(); lvl.style.width = "0%";
+    const rate = ctx.sampleRate; stream.getTracks().forEach(t => t.stop()); stream = null;
+    if(peak < 0.003){ $("micCheck").classList.add("bad"); msg(`No sound came through ${label}. Pick a different mic above, or check it isn't muted.`); return; }
+    msg("Checking what it heard\u2026");
+    let heard = "";
+    try{ const asr = await ready; asrReady = true; const out = await asrRun(asr, trimSpeech(await to16k(chunks, rate))); heard = fixTerms(String(out && out.text || "").trim()); }catch(e){}
+    const quiet = peak < 0.02;
+    $("micCheck").classList.add(quiet || !heard ? "warn" : "good");
+    msg((heard ? `Heard: \u201c${heard}\u201d. ` : "It picked up sound but no words. ") + (quiet ? "Your mic is quiet: move closer or turn up the input volume in your computer's sound settings." : heard ? "Sounds good. You're ready to call." : "Try again and speak a little louder."));
+  }catch(e){
+    $("micCheck").classList.add("bad");
+    msg(e && e.name === "NotAllowedError" ? "The microphone is blocked. Allow it for this site (icon left of the address bar), then try again." : "Couldn't open the microphone. Pick a different mic or try again.");
+  }finally{
+    try{ stream && stream.getTracks().forEach(t => t.stop()); }catch(e){} try{ ctx && ctx.close(); }catch(e){}
+    mcRun = null; $("mcLbl").textContent = "Test again"; $("micCheck").classList.remove("on"); lvl.style.width = "0%";
+  }
+}
+$("mcBtn").onclick = () => { unlockTTS(); micCheck(); };
+$("micPick").onchange = e => { try{ localStorage.setItem(MIC_KEY, e.target.value); }catch(err){} if(!wRec) wCloseAll(); $("micCheck").classList.remove("good", "warn", "bad"); $("mcMsg").textContent = "Mic changed. Tap Test again to check it."; };
+if(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) fillMicList();
+function wToggle(){ pttWanted = false; if(wRec){ if(wRec.frames === 0){ srBackupStop(wRec); wReset(); lastFromMic = true; wStart(true); } else { wRec.byTap = true; wFinish(false); } } else { lastFromMic = true; wStart(true); } }
 function toggleMic(){
   if(inClaude){ micMsg(NO_MIC_MSG); return; }
   if(useWhisperMic()){ wToggle(); return; }
@@ -1013,9 +1124,10 @@ function piperLoad(id, onProg){
   return natLoads[id] || (natLoads[id] = (async()=>{
     await Promise.all([loadScript(PIPER.ort + "ort.min.js"), loadScript(PIPER.ph + ".js")]);
     ort.env.wasm.wasmPaths = PIPER.ort; ort.env.wasm.numThreads = 1;
-    const path = PVOICE[id];
-    const cfg = JSON.parse(new TextDecoder().decode(await cachedBytes(PIPER.hf + path + ".json")));
-    const model = await cachedBytes(PIPER.hf + path, onProg);
+    const path = PVOICE[id], m = await LOCAL;
+    const get = async (suffix, prog) => { if(m && m.voices && m.voices[id]){ try{ return await cachedBytes("assets/voices/" + path + suffix, prog); }catch(e){} } return cachedBytes(PIPER.hf + path + suffix, prog); };
+    const cfg = JSON.parse(new TextDecoder().decode(await get(".json")));
+    const model = await get("", onProg);
     const session = await ort.InferenceSession.create(model, { executionProviders:["wasm"] });
     try{ await phonemize("Hello.", cfg); }catch(e){}
     return { session, cfg };
