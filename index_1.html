@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>re:Invent Call Trainer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,500;0,700;0,800;1,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a dialer workstation — route rail left, live call center, script + coach right. */
+:root{
+  --bg:#eef3f3; --panel:#ffffff; --tint:#dfeaea; --line:#c9d8d8;
+  --ink:#14233b; --muted:#56677a;
+  --teal:#0e6b66; --teal-ink:#ffffff; --navy:#1b2c4f;
+  --rep:#0e6b66; --rep-ink:#ffffff; --prospect:#f4f8f8;
+  --good:#1f7a4a; --warn:#a8650a; --bad:#b23a3a;
+  --f-display:"Archivo","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1517; --panel:#142024; --tint:#1a2b30; --line:#27393f;
+  --ink:#e4eeee; --muted:#93a7ad; --teal:#3fb3a9; --teal-ink:#06201e; --navy:#9fb6e0;
+  --rep:#1f6e68; --rep-ink:#eafffb; --prospect:#1a2a2f;
+  --good:#5cc28a; --warn:#e0a24a; --bad:#ec7a7a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1517; --panel:#142024; --tint:#1a2b30; --line:#27393f;
+  --ink:#e4eeee; --muted:#93a7ad; --teal:#3fb3a9; --teal-ink:#06201e; --navy:#9fb6e0;
+  --rep:#1f6e68; --rep-ink:#eafffb; --prospect:#1a2a2f;
+  --good:#5cc28a; --warn:#e0a24a; --bad:#ec7a7a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body)}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance}
+.eyebrow{font:500 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+header.top h1{font-size:clamp(26px,4vw,38px);font-weight:800;line-height:1;letter-spacing:-.01em}
+header.top h1 em{font-style:italic;color:var(--teal)}
+header.top p{margin:6px 0 0;color:var(--muted)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:9px 14px;font-weight:600}
+.btn.primary{background:var(--teal);color:var(--teal-ink);border-color:var(--teal)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.notice{border:1px solid var(--warn);color:var(--ink);background:var(--panel);border-radius:8px;padding:10px 14px}
+
+/* setup */
+.setup{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.personas{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.persona{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.persona[aria-pressed="true"]{border-color:var(--teal);box-shadow:inset 0 0 0 1px var(--teal);background:var(--tint)}
+.persona b{font-family:var(--f-display);font-size:16px}
+.persona span{color:var(--muted);font-size:13px}
+.persona .tag{font:500 10px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--teal)}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--panel);padding:8px 14px;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--navy);color:var(--panel)}
+details.fields summary{cursor:pointer;font-weight:600}
+.grid-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+label.f input{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:7px 9px;font-size:14px;color:var(--ink)}
+label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
+
+/* workstation */
+.station{display:grid;grid-template-columns:220px minmax(0,1fr) 320px;gap:16px;align-items:start}
+@media (max-width:1060px){.station{grid-template-columns:minmax(0,1fr) 300px}.rail{grid-column:1/-1}}
+@media (max-width:760px){.station{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+
+.rail ol{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+@media (max-width:1060px){.rail ol{flex-direction:row;flex-wrap:wrap}}
+.rail li{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;font-weight:500;font-size:14px}
+.dot{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font:500 11px/1 var(--f-mono);color:var(--muted)}
+.rail li.done .dot{background:var(--teal);border-color:var(--teal);color:var(--teal-ink)}
+.rail li.next{background:var(--tint)}
+.rail li.next .dot{border-color:var(--teal);color:var(--teal)}
+.rail .pin{margin-top:12px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+
+.call{display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden}
+.callbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.who b{font-family:var(--f-display);font-size:17px}
+.who div{color:var(--muted);font-size:13px}
+.status{font:500 11px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;padding:6px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-variant-numeric:tabular-nums}
+.status.live{color:var(--good);border-color:var(--good)}
+.status.booked{color:var(--teal-ink);background:var(--teal);border-color:var(--teal)}
+.status.ended{color:var(--bad);border-color:var(--bad)}
+.log{min-height:360px;max-height:58vh;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:82%;padding:9px 12px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.rep{align-self:flex-end;background:var(--rep);color:var(--rep-ink);border-bottom-right-radius:3px}
+.msg.prospect{align-self:flex-start;background:var(--prospect);border:1px solid var(--line);border-bottom-left-radius:3px}
+.msg .lbl{display:block;font:500 10px/1.2 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;opacity:.75;margin-bottom:3px}
+.msg.sys{align-self:center;background:none;color:var(--muted);font-size:13px;text-align:center;max-width:100%}
+.compose{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);align-items:flex-end}
+.compose textarea{flex:1;min-width:0;resize:vertical;min-height:52px;max-height:200px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:var(--bg);font-size:15px}
+.hint{padding:0 14px 12px;font-size:12px;color:var(--muted)}
+
+.side{display:flex;flex-direction:column;gap:16px}
+.next-card h3{font-size:18px;margin-top:6px}
+.line{margin-top:8px;padding:10px 12px;background:var(--tint);border-radius:8px;font-size:14px;white-space:pre-wrap}
+.line + .line{margin-top:6px}
+.line i{font-style:normal;font-weight:600;color:var(--teal)}
+.line small{display:block;font:500 10px/1.3 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.coach{border-left:3px solid var(--warn);padding:2px 0 2px 10px;margin-top:8px;font-size:14px}
+.points{margin:8px 0 0;padding-left:18px;font-size:13.5px;display:flex;flex-direction:column;gap:3px}
+
+/* scorecard */
+.score{display:flex;flex-direction:column;gap:14px}
+.score-head{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+.big{font:800 54px/1 var(--f-display);font-variant-numeric:tabular-nums;color:var(--teal)}
+.big small{font-size:20px;color:var(--muted)}
+.score-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.stage-list{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:6px}
+.stage-list li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;font-size:14px}
+.ok{color:var(--good);font-weight:700}.no{color:var(--bad);font-weight:700}
+.score ul.plain{margin:8px 0 0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+.rewrite{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.rewrite div{padding:9px 11px;border-radius:8px;font-size:14px}
+.rewrite .was{background:var(--bg);border:1px dashed var(--line);color:var(--muted)}
+.rewrite .now{background:var(--tint)}
+@media (prefers-reduced-motion:no-preference){.msg{animation:in .18s ease-out}@keyframes in{from{opacity:.4;transform:translateY(4px)}}}
+.part{color:var(--warn);font-weight:700}.pts{font:500 12px/1 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.btn.mic{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn.mic[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:var(--panel)}
+@media (prefers-reduced-motion:no-preference){.btn.mic[aria-pressed="true"]{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--bad) 25%,transparent)}}}
+@media (max-width:420px){.compose{flex-wrap:wrap}.compose textarea{flex-basis:100%}.compose .btn{flex:1;justify-content:center}}
+.persona .vtag{font:500 11px/1.3 var(--f-mono);color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Abstrakt · re:Invent outreach</div>
+      <h1>Call <em>Trainer</em></h1>
+      <p>Pitch a practice prospect, follow the route, and get scored when you hang up. Runs entirely in your browser.</p>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="startBtn">Start call</button>
+      <button class="btn danger" id="endBtn" disabled>End call &amp; score</button>
+    </div>
+  </header>
+
+  <section class="setup" id="setup" aria-label="Call setup">
+    <div class="eyebrow">Pick who you're calling</div>
+    <div class="personas" id="personas"></div>
+    <div class="row">
+      <div>
+        <div class="eyebrow" style="margin-bottom:6px">Difficulty</div>
+        <div class="seg" id="diff">
+          <button data-v="easy" aria-pressed="false">Warm</button><button data-v="normal" aria-pressed="true">Normal</button><button data-v="tough" aria-pressed="false">Tough</button>
+        </div>
+      </div>
+      <label class="chk"><input type="checkbox" id="hideScript"> Hide script lines (practice from memory)</label>
+      <label class="chk"><input type="checkbox" id="voice" checked> Prospects talk out loud</label>
+      <label class="chk" id="handsFreeWrap"><input type="checkbox" id="handsFree" checked> Hands-free mic (sends when you pause, then listens again)</label>
+    </div>
+    <details class="fields">
+      <summary>Call details that fill the script</summary>
+      <div class="grid-fields">
+        <label class="f">Your name<input id="f_name" value="Stephen"></label>
+        <label class="f">Approved client name<input id="f_client" value="OpenAI"></label>
+        <label class="f">Meeting team<input id="f_team" value="the OpenAI and AWS team"></label>
+        <label class="f">Day one<input id="f_day1" value="Tuesday"></label>
+        <label class="f">Day two<input id="f_day2" value="Wednesday"></label>
+        <label class="f">Time one<input id="f_t1" value="10:00 AM"></label>
+        <label class="f">Time two<input id="f_t2" value="2:30 PM"></label>
+        <label class="f">Time zone<input id="f_tz" value="Pacific"></label>
+        <label class="f">Location<input id="f_loc" value="the Venetian, Las Vegas"></label>
+      </div>
+    </details>
+  </section>
+
+  <div class="station">
+    <aside class="card rail" aria-label="The route">
+      <div class="eyebrow">The route</div>
+      <ol id="route"></ol>
+      <div class="pin">An issue makes the recommendation more specific. Having no issues does not break the route to the meeting.</div>
+    </aside>
+
+    <section class="card call" aria-label="Live call">
+      <div class="callbar">
+        <div class="who" id="who"><b>No call yet</b><div>Pick a prospect and press Start call.</div></div>
+        <span class="status" id="status">Idle</span>
+      </div>
+      <div class="log" id="log" aria-live="polite"></div>
+      <div class="compose">
+        <textarea id="input" placeholder="Say your line…" disabled></textarea>
+        <button class="btn mic" id="micBtn" type="button" aria-pressed="false" aria-label="Speak your line" title="Speak your line" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="micLbl">Talk</span></button>
+        <button class="btn primary" id="sendBtn" disabled>Send</button>
+      </div>
+      <div class="hint" id="micMsg" role="status" hidden></div>
+      <div class="hint">Tap Talk or press Ctrl+M to speak · Enter sends · Shift+Enter for a new line · Prospects are scripted, so stick close to the route wording</div>
+    </section>
+
+    <aside class="side">
+      <div class="card next-card" id="nextCard">
+        <div class="eyebrow">Next on the route</div>
+        <h3 id="nextTitle"></h3>
+        <div id="nextLines"></div>
+        <div class="coach" id="coach" hidden></div>
+      </div>
+      <div class="card">
+        <div class="eyebrow">Key talking points</div>
+        <ul class="points">
+          <li>What are they currently doing with AI?</li>
+          <li>Any bottlenecks or challenges?</li>
+          <li>What they've looked into already.</li>
+          <li>Value: find information, reduce repetitive work, build AI into products and services.</li>
+          <li>Schedule a meeting with the meeting team at re:Invent.</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+
+  <section class="card score" id="score" hidden aria-label="Scorecard"></section>
+</div>
+
+<script>
+/* ---------- Prospects (all pre-written) ---------- */
+const PERSONAS = [
+  {id:"dana", tag:"Open door", name:"Dana Whitfield", title:"Director of IT", company:"Crestline Freight (regional logistics)",
+   blurb:"Team tinkers with ChatGPT. Curious, friendly, a bit chatty.", pref:"morning", dayPick:0, noIssue:false,
+   issueKw:["email","pdf","shipment","status","dig","search","find","dispatch","information","info"],
+   card:{aiUse:"A few people use ChatGPT for emails and summaries; no company plan.", issue:"Dispatchers dig through old emails and PDFs to answer shipment-status calls.", looked:"A couple of Copilot webinars.", pref:"Mornings"},
+   lines:{
+    pickup:["Crestline Freight, this is Dana."],
+    introOnly:["Oh, okay, sure. What can I do for you?","Hi! What's this about?"],
+    aiUse:["Honestly, not much officially. A few of us use ChatGPT for emails and summarizing things, but there's no real plan.","Some people here play around with ChatGPT for writing emails. Nothing company-wide yet."],
+    issue:["Oh, the big one is our dispatchers. Customers call asking where a shipment is, and they end up digging through old emails and PDFs for twenty minutes.","Finding stuff, mainly. Shipment info is buried in emails and PDFs, and dispatchers burn hours hunting for it."],
+    deflect:["Challenges with what, exactly?"],
+    ack:["Yeah, exactly. It drives them nuts.","Right, that's the one."],
+    creed:["Okay, got it. That sounds interesting.","Oh, neat. Okay."],
+    looked:["I've watched a couple of webinars on Copilot, but we haven't decided anything.","Just a few webinars, mostly on Microsoft Copilot."],
+    cap:["The finding-information part is exactly our problem.","Helping people find information, that's the one that jumps out for us."],
+    email:["Sure, it's dana.whitfield@crestlinefreight.com."],
+    curious:["Probably the search side, getting answers out of all those emails and PDFs."],
+    objection:["Hmm, I'm not sure I'll have time at re:Invent. The schedule's already packed.","What would that meeting actually look like?"],
+    agree:["Yeah, I could fit that in. When are they around?","Sure, that sounds useful. What times do they have?"],
+    generic:["Sorry, what do you mean?","Hm, can you say that a different way?"],
+    hangup:["I'm sorry, I've got to jump on something. Just send me an email."],
+    bye:["Perfect, I'll watch for it. Thanks so much!"]
+   }},
+  {id:"marcus", tag:"Skeptic", name:"Marcus Reyes", title:"VP of Operations", company:"Hollis Precision Manufacturing",
+   blurb:"\"We already have something.\" Short answers, needs a reason to care.", pref:"afternoon", dayPick:1, noIssue:false,
+   issueKw:["report","log","maintenance","quality","shift","supervisor","manual","paperwork","hand","repetitive","writ"],
+   card:{aiUse:"An AI add-on in their ERP; hardly anyone uses it.", issue:"Supervisors hand-write quality reports and maintenance logs every shift, about 45 minutes a day.", looked:"An expensive pilot that went nowhere.", pref:"Afternoons"},
+   lines:{
+    pickup:["Marcus Reyes."],
+    introOnly:["Okay. What do you need?","Yeah, go ahead."],
+    aiUse:["We've got an AI add-on in our ERP. Nobody really uses it.","We already have something. Our ERP vendor sold us an AI module last year."],
+    issue:["Paperwork. Supervisors write quality reports and maintenance logs by hand every shift. Probably 45 minutes a day each.","Honestly? Shift reports. Quality and maintenance logs are all manual, and it eats my supervisors' time."],
+    deflect:["Why are you asking?","Depends. What are you actually selling?"],
+    ack:["Yeah.","That's about right."],
+    creed:["Okay.","Mm-hm."],
+    looked:["We did a pilot with a consultant. Cost a lot, went nowhere.","Tried a pilot. Wasn't impressed."],
+    cap:["The repetitive work piece. That's where we bleed time.","Cutting the repetitive stuff, maybe. The rest I'm not sure about."],
+    email:["mreyes@hollisprecision.com."],
+    curious:["The repetitive-work side. If it can take reports off my supervisors' plates."],
+    objection:["We already have an AI tool. I don't see why I'd need another meeting.","I've sat through these before. What makes this different?"],
+    agree:["Fine. If it's about the shift reports, I'll take twenty minutes.","Alright, I'll hear them out. When?"],
+    generic:["Not following you.","Get to the point."],
+    hangup:["Look, I've got to go. Send me an email."],
+    bye:["Alright. I'll accept it when it comes in."]
+   }},
+  {id:"priya", tag:"Busy", name:"Priya Natarajan", title:"CTO", company:"Ledgerly (B2B invoicing software)",
+   blurb:"Walking between meetings. Tries to get you to \"just send an email.\"", pref:"morning", dayPick:1, noIssue:false,
+   issueKw:["product","feature","assistant","roadmap","customers","build","privacy","data"],
+   card:{aiUse:"Engineers use coding assistants; considering an AI feature in the product.", issue:"Customers want an AI assistant inside Ledgerly and the roadmap has no plan for it.", looked:"Compared model API costs; worried about data privacy.", pref:"Mornings"},
+   lines:{
+    pickup:["Hi, this is Priya. I've got about two minutes."],
+    introOnly:["Okay, quickly, what's this about?","Sure, but I'm between meetings."],
+    aiUse:["Our engineers use coding assistants. We're also looking at an AI feature in the product.","Internally, coding assistants. Product-wise, we're figuring it out."],
+    issue:["Customers keep asking for an AI assistant inside Ledgerly, and we don't have a clear plan for building it.","The roadmap. Customers want AI features and we haven't figured out how to build them safely."],
+    deflect:["Can you just send me an email?","What's the short version?"],
+    ack:["Exactly.","Yes, that's it."],
+    creed:["Okay, makes sense.","Got it."],
+    looked:["I've compared a few model APIs on cost. Data privacy is my big worry.","Pricing on a few APIs. Privacy is the open question."],
+    cap:["Building AI into the product. That's the one I care about.","The product piece is the relevant part for us."],
+    email:["priya@ledgerly.io."],
+    curious:["How other SaaS companies are building AI features without risking customer data."],
+    objection:["Can you just email me the details?","I'm swamped that week. Is this really worth the time?"],
+    agree:["Okay, if they can talk product and privacy, I'm in. What do they have?","Fine, that's actually relevant. When?"],
+    generic:["Sorry, I'm short on time. What's the ask?","I didn't catch that."],
+    hangup:["I have to run into a meeting. Email me."],
+    bye:["Great, I'll accept it. Thanks."]
+   }},
+  {id:"tom", tag:"No issues", name:"Tom Becker", title:"Director of Finance Systems", company:"Prairie State Credit Union",
+   blurb:"Happy with how things are. Tests whether you keep the route without a pain point.", pref:"afternoon", dayPick:0, noIssue:true,
+   issueKw:["other","credit union","peers","general","what's available","information","options"],
+   card:{aiUse:"An AI fraud-detection tool from their core banking vendor.", issue:"None. Things are going fine; just general curiosity.", looked:"Industry articles about AI in banking.", pref:"Afternoons"},
+   lines:{
+    pickup:["Good afternoon, Tom Becker speaking."],
+    introOnly:["Okay, what can I help you with?","Sure, go ahead."],
+    aiUse:["We use an AI fraud-detection tool from our core banking vendor. Beyond that, we're cautious.","Just fraud detection through our banking vendor. We move carefully here."],
+    issue:["Honestly, things are going pretty well. No big problems right now.","Not really. We're in good shape at the moment."],
+    deflect:["Not really, no."],
+    ack:["Thanks. Yes, we're fortunate.","Appreciate that."],
+    creed:["Okay, I see.","That makes sense."],
+    looked:["Mostly industry articles about AI in banking.","I've read a few articles. Nothing formal."],
+    cap:["Interesting. Helping our member-service team find information faster might matter.","The information piece is interesting, as long as it's compliant."],
+    email:["It's tbecker@prairiestatecu.org."],
+    curious:["What other credit unions are actually doing with it."],
+    objection:["I'm not sure I need a meeting if nothing's broken.","We're pretty happy with things. What would we even talk about?"],
+    agree:["Sure, a general overview would be helpful. When are they available?","Okay, I'd be open to that. What times work?"],
+    generic:["I'm sorry, I'm not sure what you mean.","Could you clarify that?"],
+    hangup:["I should get back to work. Feel free to send an email."],
+    bye:["Sounds good. I'll accept it when it arrives. Thank you."]
+   }}
+];
+
+const ROUTE = [
+  {id:"approach", label:"Current approach"},
+  {id:"issues", label:"Issues"},
+  {id:"acknowledge", label:"Acknowledge"},
+  {id:"creed", label:"Creed"},
+  {id:"capabilities", label:"Capabilities"},
+  {id:"email", label:"Email"},
+  {id:"recommendation", label:"Meeting recommendation"},
+  {id:"close", label:"Close"}
+];
+const GOALS = {
+  approach:"Introduce yourself (Abstrakt, recorded line, client, re:Invent) and ask how they currently use AI.",
+  issues:"Ask what bottlenecks or challenges they're running into.",
+  acknowledge:"Restate their issue in a few words and thank them, or say \"good to hear\" if they have none.",
+  creed:"Explain the meetings with the team at re:Invent about OpenAI and AWS, then ask what resources they've looked into.",
+  capabilities:"Give the rundown: finding information, reducing repetitive work, building AI into products and services.",
+  email:"Ask for a good email, then what they're most curious to learn more about.",
+  recommendation:"Recommend meeting the team at re:Invent, tied to their issue or interest.",
+  close:"Offer two days, mornings or afternoons, two times; then confirm day, time, time zone, location and email."
+};
+
+const $ = id => document.getElementById(id);
+const F = () => ({name:$("f_name").value||"[NAME]", client:$("f_client").value||"[APPROVED CLIENT NAME]", team:$("f_team").value||"[MEETING TEAM]",
+  day1:$("f_day1").value||"[DAY ONE]", day2:$("f_day2").value||"[DAY TWO]", t1:$("f_t1").value||"[TIME ONE]", t2:$("f_t2").value||"[TIME TWO]",
+  tz:$("f_tz").value||"[TIME ZONE]", loc:$("f_loc").value||"[LOCATION]"});
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+
+function scriptFor(id, p){
+  const f = F(), pn = p ? p.name.split(" ")[0] : "[PROSPECT]";
+  const v = s => `<i>${esc(s)}</i>`;
+  const issueTxt = p && st && st.issue && !p.noIssue ? p.card.issue.replace(/\.$/,"").toLowerCase() : "[briefly restate issue]";
+  const S = {
+    approach:[["Introduction",`"Hi ${v(pn)}, this is ${v(f.name)} calling from Abstrakt on a recorded line. We're working with ${v(f.client)} to connect with businesses attending re:Invent about putting AI to work.\n\nI understand you might already have something in place, but I'm curious — how are you currently using AI in your business?"`]],
+    issues:[["Bottlenecks or challenges",`"Good to know. What bottlenecks or challenges are you running into with that?"`]],
+    acknowledge:[["If they share an issue",`"Got it — so ${v(issueTxt)}. I appreciate you sharing that."`],["If no issues",`"Good to hear! I wouldn't want you to be having any issues."`]],
+    creed:[["Creed",`"Just a little more about why we're reaching out… We're arranging conversations with ${v(f.team)} at re:Invent to help businesses understand what they can do with OpenAI and AWS.\n\nThe team can talk through your needs, answer your questions, and help you identify practical opportunities for AI — whether that's something you can use now or consider down the road.\n\nWhat resources have you looked into already?"`]],
+    capabilities:[["Rundown",`"Okay, good to know. Just to give you a quick rundown, some of the things we can discuss are helping employees find and use information, reducing repetitive work, and building AI into the products and services you provide your customers."`]],
+    email:[["Email + interest",`"What would be a good email for me to send some information over to?\n\nOut of everything I shared today, what would you be most curious to learn more about?"`]],
+    recommendation:[["Issue or clear interest",`"Okay, so I am going to get you some general information — but since you mentioned ${v("[issue or interest]")}, I'd recommend getting you connected with ${v(f.team)} while you're at re:Invent so they can explore that with you."`],["General information only",`"Okay, so I am going to get you some general information. I'd also recommend getting you connected with ${v(f.team)} while you're at re:Invent so you can get a clearer picture of what's available and what might be useful for your business."`]],
+    close:[["Schedule",`"They have time available ${v(f.day1)} and ${v(f.day2)}. Do mornings or afternoons work better for you?"\n\n"I have ${v(f.t1)} or ${v(f.t2)}. Which works better?"`],["Confirm",`"Perfect. I've got you down for ${v(st&&st.day?st.day:"[day]")} at ${v(st&&st.time?st.time:"[time]")} ${v(f.tz)}, at ${v(f.loc)}. I'll send the invitation to ${v(st&&st.email&&persona?persona.lines.email[0].match(/[\w.]+@[\w.]+\w/)[0]:"[confirmed email]")}.\n\nPlease accept the invitation when it comes through so the team knows you received it. We look forward to meeting you at re:Invent."`]]
+  };
+  return S[id];
+}
+
+/* ---------- Reading what the rep said ---------- */
+const WEEKDAYS = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+function daysIn(t){
+  const f = F(), names = [...new Set([...WEEKDAYS, f.day1.toLowerCase(), f.day2.toLowerCase(), "tomorrow"])].filter(Boolean);
+  const found = [];
+  names.forEach(n=>{ const i = t.indexOf(n); if(i>=0) found.push([i,n]); });
+  return found.sort((a,b)=>a[0]-b[0]).map(x=>x[1]).filter((n,i,arr)=>!arr.some((m,j)=>j!==i && m.length>n.length && m.includes(n)));
+}
+function timesIn(t){
+  const out = [];
+  const re = /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/gi; let m;
+  while((m = re.exec(t))) out.push(`${m[1]}:${m[2]||"00"} ${m[3].replace(/\./g,"").toUpperCase()}`);
+  if(!out.length){ const re2 = /\b(\d{1,2}):(\d{2})\b/g; while((m = re2.exec(t))) out.push(`${m[1]}:${m[2]}`); }
+  return out;
+}
+function analyze(text){
+  const t = text.toLowerCase().replace(/[’']/g,"'"), has = r => r.test(t), f = F();
+  const isQ = /\?|\b(what|how|which|any|where|have you|are you|do you|would you|could you)\b/.test(t);
+  return {
+    t, isQ, words: t.split(/\s+/).filter(Boolean).length,
+    intro: {abstrakt:has(/abstra[ck]t/), recorded:has(/recorded/), client: f.client.length>1 && t.includes(f.client.toLowerCase()), reinvent:has(/re:? ?invent/)},
+    approach: has(/\b(ai|a\.i\.|artificial intelligence|chatgpt|gpt|copilot)\b/) && has(/currently|right now|today|how are you|what are you|are you (using|doing|leverag)|using|leverag|doing with/) && isQ,
+    issues: has(/bottleneck|challeng|pain point|struggl|problem|issue|frustrat|hardest|slow(s|ing)? (you|things)|headache|roadblock|keeping you up/) && isQ,
+    ackWords: has(/got it|appreciate|makes sense|i understand|understood|thanks for sharing|thank you for sharing|good to hear|glad to hear|great to hear|sounds like|that's (tough|frustrating|great|good|a lot)|i hear you|that must|so (you|your|the|it)/),
+    creed: has(/openai|open ai|\baws\b|amazon/) && has(/arrang|reaching out|conversations? with|meetings? with|the team|their team/),
+    resources: has(/resources|looked into|look into|looking into|explored|research|evaluat|considered|tried|checked out/) && isQ,
+    capCount: [/find(ing)? (and use )?(information|info|answers)|find and use|search|knowledge/, /repetitive|manual work|automat|busywork|save (time|hours)|routine/, /products? (and|&) services|build(ing)? ai into|into (the|your) products?|your customers/].filter(r=>r.test(t)).length,
+    emailAsk: has(/e-?mail/) && (isQ || has(/send/)),
+    curiousAsk: has(/most curious|curious to (learn|hear|know)|most interest|learn more|stood out|resonat|jump(ed|s)? out|most useful/),
+    recommend: has(/recommend|suggest|get(ting)? you (connected|in front|a meeting|some time|time)|connect you with|sit down with|meet with|set you up|set up a (meeting|time|call)|grab (some )?time|book (a|some|you)/) && has(/re:? ?invent|team|meeting|them|they|conversation/),
+    days: daysIn(t), times: timesIn(text), ampmAsk: has(/morning|afternoon/),
+    scheduleAsk: has(/what (day|time)|which (day|time|works|one)|availab|when (are|would|could|is)|open (on|slot)/),
+    confirm: has(/got you down|i've got you|i have you (down|for)|confirm|lock(ed)? (you|it|that) in|send (you )?(the|an|a calendar) invit|calendar invite|accept the invit|you're booked|booked you|put you down/),
+    tz: f.tz.length>1 && t.includes(f.tz.toLowerCase().split(" ")[0]) || has(/\b(pt|pst|pdt|pacific|eastern|central|mountain|et|ct)\b/),
+    loc: f.loc.length>1 && t.includes(f.loc.toLowerCase().replace(/^the /,"").split(",")[0]) || has(/venetian|caesars|mgm|mandalay|wynn|location|booth|las vegas|vegas/),
+    inviteAccept: has(/accept/),
+    emailMention: has(/e-?mail|@|invit/)
+  };
+}
+
+/* ---------- State ---------- */
+let persona = PERSONAS[0], difficulty = "normal", status = "idle", turns = [], st = null, typing = false;
+function newState(){
+  return { aiUse:false, issue:false, looked:false, email:false, curious:false, agreed:false,
+    objections: {easy:0, normal:1, tough:2}[difficulty], patience: {easy:99, normal:4, tough:2}[difficulty],
+    day:null, ampm:null, time:null, booked:false, ended:false, lastWas:"pickup",
+    hits:{}, repTurn:0, intro:{abstrakt:false, recorded:false, client:false, reinvent:false},
+    recSpecific:null, recBeforeIssue:false, offeredChoice:false, confirmDetails:null, offRoute:0, longTurns:0, coach:"" };
+}
+
+function hit(id){ if(!(id in st.hits)) st.hits[id] = st.repTurn; }
+
+function prospectReply(text){
+  const a = analyze(text), L = persona.lines, p = persona;
+  st.repTurn++;
+  if(a.words > 90) st.longTurns++;
+  if(st.repTurn === 1) Object.keys(st.intro).forEach(k=> st.intro[k] = a.intro[k]);
+  else Object.keys(st.intro).forEach(k=> st.intro[k] = st.intro[k] || (st.repTurn<=2 && a.intro[k]));
+
+  // which route stages did this line cover?
+  const ackable = st.lastWas === "issue";
+  const restated = ackable && !p.noIssue && p.issueKw.some(k=>a.t.includes(k));
+  const ack = ackable && (a.ackWords || restated);
+  if(ack && !a.t.includes("?")) a.issues = false; // "Good to hear, no issues" is an acknowledgement, not a new question
+  const sched = a.days.length || a.times.length || a.ampmAsk || a.scheduleAsk;
+  if(a.approach) hit("approach");
+  if(a.issues) hit("issues");
+  if(ack) hit("acknowledge");
+  if(a.creed) hit("creed");
+  if(a.capCount >= 2) hit("capabilities");
+  if(a.emailAsk || a.curiousAsk) hit("email");
+  if(a.recommend){ hit("recommendation");
+    if(st.recSpecific === null) st.recSpecific = p.noIssue ? true : (st.issue && p.issueKw.some(k=>a.t.includes(k)));
+    if(!st.issue && !p.noIssue) st.recBeforeIssue = true; }
+  if(sched || a.confirm) hit("close");
+  if((a.days.length>=2) || (a.times.length>=2) || /morning.*afternoon|afternoon.*morning/.test(a.t)) st.offeredChoice = true;
+
+  const covered = ["approach","issues","creed","email","recommendation","close"].some(k=>st.hits[k]===st.repTurn) || ack || a.capCount>=2 || a.resources;
+  const say = (kind, arr) => { st.lastWas = kind; return pick(arr); };
+
+  // 1. confirmation
+  if(a.confirm && st.time){
+    const saidDays = a.days, saidTimes = a.times;
+    if(st.day && saidDays.length && !saidDays.includes(st.day.toLowerCase())){ st.wrongConfirm = true; st.coach = "Read back exactly what they picked."; st.lastWas="fix"; return {text:`Wait, I said ${st.day}, not ${saidDays[0].charAt(0).toUpperCase()+saidDays[0].slice(1)}.`}; }
+    if(saidTimes.length && !saidTimes.some(x=>x.split(" ")[0]===st.time.split(" ")[0])){ st.wrongConfirm = true; st.coach = "Read back exactly what they picked."; st.lastWas="fix"; return {text:`Sorry, I thought we said ${st.time}?`}; }
+    st.coach = "Booked. End the call to see your score.";
+    st.confirmDetails = {day: !!(st.day && a.t.includes(st.day.toLowerCase())), time: a.times.length>0 || a.t.includes(st.time.split(":")[0]), tz:a.tz, loc:a.loc, email:a.emailMention, accept:a.inviteAccept};
+    st.booked = true;
+    const needEmail = !st.email; st.email = true;
+    return {text:(needEmail ? `Send it to ${L.email[0].match(/[\w.]+@[\w.]+\w/)[0]}. ` : "") + say("bye", L.bye), outcome:"booked"};
+  }
+  // 2. scheduling
+  if(sched){
+    if(!st.agreed){
+      if(st.objections > 0){ st.objections--; st.patience--; st.coach = "They haven't agreed to a meeting yet. Recommend it first, tied to what they told you."; return {text:say("objection", L.objection)}; }
+      st.agreed = true;
+    }
+    const f = F();
+    if(a.days.length && !st.day){ const d = a.days[Math.min(p.dayPick, a.days.length-1)]; st.day = d.charAt(0).toUpperCase()+d.slice(1); }
+    if(a.ampmAsk && !st.ampm) st.ampm = p.pref;
+    if(a.times.length){
+      const want = p.pref === "morning" ? "AM" : "PM";
+      st.time = a.times.find(x=>x.endsWith(want)) || a.times[0];
+      st.ampm = st.ampm || p.pref;
+    }
+    let r;
+    if(st.time && st.day) { r = `${st.day} at ${st.time} works for me.`; st.coach = "They picked a slot. Confirm day, time, time zone, location and email, and ask them to accept the invite."; }
+    else if(st.time) { r = `${st.time} works. Which day was that again?`; st.coach = "Give them the day options so they can pick one."; }
+    else if(st.day && st.ampm) { r = `${st.day} works, and ${p.pref}s are better for me.`; st.coach = `Offer two specific ${p.pref} times, like "I have ${p.pref==="morning"?f.t1:f.t2} or …".`; }
+    else if(st.day) { r = `${st.day} could work.`; st.coach = "Ask whether mornings or afternoons are better."; }
+    else if(st.ampm) { r = `${p.pref.charAt(0).toUpperCase()+p.pref.slice(1)}s are better for me. Which days?`; st.coach = "Offer the two days."; }
+    else { r = "What do they have open?"; st.coach = `Give two days: "They have time available ${f.day1} and ${f.day2}."`; }
+    st.lastWas = "schedule";
+    return {text:r};
+  }
+  // 3. meeting recommendation
+  if(a.recommend){
+    if(st.objections > 0){ st.objections--; st.coach = "Handle the objection: tie the meeting to their issue or interest and recommend it again."; return {text:say("objection", L.objection)}; }
+    st.agreed = true; st.coach = `Move to scheduling: "They have time available ${F().day1} and ${F().day2}. Do mornings or afternoons work better?"`;
+    return {text:say("agree", L.agree)};
+  }
+  // 4. email / curiosity
+  if(a.emailAsk || a.curiousAsk){
+    const parts = [];
+    if(a.emailAsk){ st.email = true; parts.push(L.email[0]); }
+    if(a.curiousAsk){ st.curious = true; parts.push(pick(L.curious)); }
+    st.coach = !st.curious ? "Ask what they'd be most curious to learn more about." : "Use their interest to recommend the meeting at re:Invent.";
+    st.lastWas = "email"; return {text:parts.join(" ")};
+  }
+  // 5. capabilities rundown
+  if(a.capCount >= 2){ st.coach = "Ask for a good email to send information to."; return {text:say("cap", L.cap)}; }
+  // 6. resources question
+  if(a.resources){ st.looked = true; st.coach = "Give the quick rundown of what the team can discuss."; return {text:say("looked", L.looked)}; }
+  // 7. creed statement without the question
+  if(a.creed){ st.coach = "Finish the creed by asking what resources they've looked into."; return {text:say("creed", L.creed)}; }
+  // 8. challenges
+  if(a.issues){
+    if(difficulty === "tough" && !st.aiUse){ st.patience--; st.coach = "Earn it first: ask how they currently use AI."; return {text:say("deflect", L.deflect)}; }
+    st.issue = true; st.coach = p.noIssue ? `No issues is fine: "Good to hear! I wouldn't want you to be having any issues."` : "Briefly restate their issue and thank them for sharing.";
+    return {text:say("issue", L.issue)};
+  }
+  // 9. current approach
+  if(a.approach){ st.aiUse = true; st.coach = "Ask what bottlenecks or challenges they're running into with that."; return {text:say("aiUse", L.aiUse)}; }
+  // 10. acknowledgement alone
+  if(ack){ st.coach = "Explain why you're reaching out (the creed) and ask what resources they've looked into."; return {text:say("ack", L.ack)}; }
+  // 11. intro with no question yet
+  if(st.repTurn === 1 && (a.intro.abstrakt || a.intro.reinvent)){ st.coach = "Ask how they're currently using AI in their business."; return {text:say("introOnly", L.introOnly)}; }
+  // 12. off the route
+  st.offRoute++; st.patience--;
+  if(st.patience <= 0){ st.ended = true; return {text:say("hangup", L.hangup), outcome:"ended"}; }
+  st.coach = "That didn't move the call forward. Use the next line on the route.";
+  return {text:say("generic", L.generic)};
+}
+
+/* ---------- Scoring ---------- */
+function scoreCall(){
+  const items = [], h = st.hits, I = st.intro;
+  const add = (label, pts, max, note) => items.push({label, pts, max, note});
+  const introPts = (I.abstrakt?3:0) + (I.recorded?4:0) + (I.client?3:0);
+  const miss = [!I.abstrakt&&"Abstrakt", !I.recorded&&"recorded line", !I.client&&"client name"].filter(Boolean);
+  add("Introduction", introPts, 10, miss.length ? `Missing: ${miss.join(", ")}.` : "Abstrakt, recorded line and client all named.");
+  add("Current approach", h.approach!=null?10:0, 10, h.approach!=null ? "Asked how they use AI today." : "Never asked how they currently use AI.");
+  add("Issues", h.issues!=null?10:0, 10, h.issues!=null ? "Asked about bottlenecks or challenges." : "Never asked about challenges.");
+  add("Acknowledge", h.acknowledge!=null?10:0, 10, h.acknowledge!=null ? "Acknowledged what they shared." : "Didn't restate or acknowledge their answer.");
+  add("Creed", (h.creed!=null?8:0) + (st.looked?4:0), 12, h.creed!=null ? (st.looked ? "Explained the meetings and asked about resources." : "Explained the meetings but skipped \"what resources have you looked into?\"") : "Didn't explain why you're reaching out.");
+  add("Capabilities", h.capabilities!=null?10:0, 10, h.capabilities!=null ? "Gave the rundown." : "Skipped the rundown of the three value areas.");
+  add("Email + interest", (st.email&&h.email!=null?6:0) + (st.curious?4:0), 10, [!st.email&&"never asked for an email", !st.curious&&"didn't ask what they're most curious about"].filter(Boolean).join("; ").replace(/^./,c=>c.toUpperCase()) || "Got the email and their main interest.");
+  add("Recommendation", h.recommendation!=null ? (st.recSpecific ? 10 : 7) : 0, 10, h.recommendation==null ? "Never recommended the re:Invent meeting." : st.recSpecific ? "Tied the meeting to what they shared." : "Recommended it, but didn't tie it to their issue.");
+  const cd = st.confirmDetails;
+  const closePts = (st.offeredChoice?6:0) + (cd ? 2 + ["tz","loc","email","accept"].filter(k=>cd[k]).length : 0);
+  add("Close", closePts, 12, !st.offeredChoice && !cd ? "Didn't get to scheduling." : [st.offeredChoice?"Offered choices.":"Offer two options instead of one.", cd ? (["tz","loc","email","accept"].filter(k=>!cd[k]).map(k=>({tz:"time zone",loc:"location",email:"email",accept:"ask them to accept the invite"}[k])).join(", ").replace(/^(.)/,"Confirm missed: $1") || "Full confirmation.") : "Never confirmed the booking."].join(" "));
+  add("Booked", st.booked?6:0, 6, st.booked ? "Meeting on the calendar." : "No meeting booked.");
+
+  // order: count route stages hit before an earlier stage
+  const order = ROUTE.map(r=>r.id).filter(id=>h[id]!=null);
+  let outOfOrder = 0;
+  for(let i=1;i<order.length;i++) if(h[order[i]] < h[order[i-1]]) outOfOrder++;
+  const orderPenalty = Math.min(10, outOfOrder*3);
+  let total = items.reduce((s,x)=>s+x.pts,0) - orderPenalty;
+  total = Math.max(0, Math.min(100, total));
+
+  const tips = [];
+  const firstMissing = ROUTE.find(r=>h[r.id]==null);
+  if(firstMissing) tips.push(`First missed stop: ${firstMissing.label}. ${GOALS[firstMissing.id]}`);
+  if(outOfOrder) tips.push(`You jumped ahead on the route ${outOfOrder} time${outOfOrder>1?"s":""}. Practice the same route every time.`);
+  if(st.recBeforeIssue) tips.push("You recommended the meeting before learning their challenge. An issue makes the recommendation more specific.");
+  if(st.longTurns) tips.push("Some of your turns ran long. Say one script block, then let them talk.");
+  if(st.offRoute >= 2) tips.push("Several lines didn't move the call forward. Lean on the script wording.");
+  if(st.wrongConfirm) tips.push("You read back the wrong day or time when confirming. Repeat exactly what they chose.");
+  if(st.ended) tips.push("The prospect hung up. On Tough, earn the right to ask by starting with how they use AI today.");
+  if(!tips.length) tips.push("Clean run. Try it on Tough or with Hide script lines turned on.");
+  return {total, items, tips, outOfOrder, orderPenalty};
+}
+
+/* ---------- UI ---------- */
+function renderPersonas(){
+  $("personas").innerHTML = PERSONAS.map(p=>`<button class="persona" data-id="${p.id}" aria-pressed="${p===persona}"><span class="tag">${p.tag}</span><b>${esc(p.name)}</b><span>${esc(p.title)} · ${esc(p.company)}</span><span>${esc(p.blurb)}</span><span class="vtag">Voice: ${({dana:"bright and chatty",marcus:"low, slow, clipped",priya:"fast and hurried",tom:"calm and measured"})[p.id]}</span></button>`).join("");
+  $("personas").querySelectorAll(".persona").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; persona = PERSONAS.find(p=>p.id===b.dataset.id); renderPersonas(); });
+}
+$("diff").querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; difficulty=b.dataset.v; $("diff").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x===b))); });
+
+function nextStage(){ return st ? ROUTE.find(r=>st.hits[r.id]==null) : ROUTE[0]; }
+function renderRoute(){
+  const n = nextStage(), live = status!=="idle";
+  $("route").innerHTML = ROUTE.map((r,i)=>{ const done = st && st.hits[r.id]!=null; return `<li class="${done?"done":""} ${n&&n.id===r.id&&live?"next":""}"><span class="dot">${done?"✓":i+1}</span>${r.label}</li>`; }).join("");
+  let id = n ? n.id : "close";
+  if(st && st.hits.close!=null && !st.booked) id = "close";
+  $("nextTitle").textContent = st && st.booked ? "Booked" : (n ? n.label : "Close");
+  $("nextLines").innerHTML = $("hideScript").checked ? `<div class="line"><small>Goal</small>${esc(GOALS[id])}</div>` :
+    scriptFor(id, live?persona:null).map(([t,s])=>`<div class="line"><small>${esc(t)}</small>${s}</div>`).join("");
+  const c = st && st.coach; $("coach").hidden = !c; $("coach").textContent = c ? "Coach: " + c : "";
+}
+$("hideScript").onchange = renderRoute;
+document.querySelectorAll(".grid-fields input").forEach(i=>i.oninput=renderRoute);
+
+function addMsg(who, text){
+  const d = document.createElement("div"); d.className = "msg " + who;
+  if(who!=="sys"){ const l=document.createElement("span"); l.className="lbl"; l.textContent = who==="rep" ? "You" : persona.name; d.append(l); }
+  const t = document.createElement("span"); t.textContent = text; d.append(t);
+  $("log").append(d); $("log").scrollTop = $("log").scrollHeight; return t;
+}
+function setStatus(s, label){ status = s; const el=$("status"); el.className = "status " + ({live:"live",booked:"booked",ended:"ended"}[s]||""); el.textContent = label; }
+function setInput(on){ $("input").disabled = !on; $("sendBtn").disabled = !on; $("micBtn").disabled = !on; if(!on) stopMic(true); }
+/* ---------- Voice personalities (browser text-to-speech, no credits) ---------- */
+const VOICE = {
+  dana:  {gender:"f", rate:1.08, pitch:1.2,  prefer:["Samantha","Jenny","Aria","Google US English","Zira","Allison","Ava"],
+          fillers:["Oh, ","Um, ","Ha, okay. ","Oh gosh, ","So, "], spokenOnly:false, chance:.45},
+  marcus:{gender:"m", rate:.9,  pitch:.72,  prefer:["Guy","David","Alex","Fred","Google UK English Male","Daniel","Mark","Tom"],
+          fillers:["Mm. ","Look. ","Yeah. ","Hm. "], chance:.35},
+  priya: {gender:"f", rate:1.28, pitch:1.0, prefer:["Karen","Moira","Tessa","Veena","Libby","Sonia","Google UK English Female","Victoria","Susan"],
+          fillers:["Yeah, yeah. ","Right, ","Okay, so, ","Sorry, "], chance:.4},
+  tom:   {gender:"m", rate:.86, pitch:.95,  prefer:["Daniel","Ryan","Thomas","Christopher","Eric","Google UK English Male","David","Alex"],
+          fillers:["Well, ","Hmm, ","You know, ","Let's see, "], chance:.4}
+};
+const FEMALE = /samantha|jenny|aria|zira|allison|ava|karen|moira|tessa|veena|libby|sonia|victoria|susan|female|fiona|serena|michelle|emma|olivia|natasha|hazel|catherine|kate|nicky/i;
+const MALE = /david|guy|alex|fred|daniel|mark|tom|ryan|thomas|christopher|eric|male|george|james|oliver|aaron|rishi|arthur|brian|andrew|roger/i;
+let voices = [];
+function loadVoices(){ try{ voices = speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang)); }catch(e){} }
+try{ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }catch(e){}
+function voiceFor(p){
+  const cfg = VOICE[p.id]; if(!voices.length) loadVoices();
+  for(const name of cfg.prefer){ const v = voices.find(v=>v.name.toLowerCase().includes(name.toLowerCase())); if(v) return v; }
+  const g = voices.filter(v=> cfg.gender==="f" ? FEMALE.test(v.name) && !/\bmale\b/i.test(v.name) : MALE.test(v.name) && !/female/i.test(v.name));
+  const pool = g.length ? g : voices; if(!pool.length) return null;
+  return pool[PERSONAS.indexOf(p) % pool.length];
+}
+function withPersonality(text){
+  const cfg = VOICE[persona.id];
+  if(Math.random() < cfg.chance && !/^(oh|um|mm|look|yeah|hm|well|right|okay|sorry|you know|let's|ha)/i.test(text)){
+    const f = pick(cfg.fillers); return f + text.charAt(0).toLowerCase() + text.slice(1).replace(/^i\b/,"I");
+  }
+  return text;
+}
+function speak(text, done){
+  try{ if(!$("voice").checked || !window.speechSynthesis) return false;
+    speechSynthesis.cancel(); const cfg = VOICE[persona.id];
+    const spoken = text.replace(/—/g,", ").replace(/\.\.\.|…/g,", ").replace(/([\w.]+)@([\w.]+)/g,(m,a,b)=>a.replace(/\./g," dot ")+" at "+b.replace(/\./g," dot "));
+    const u = new SpeechSynthesisUtterance(spoken);
+    const v = voiceFor(persona); if(v){ u.voice = v; u.lang = v.lang; }
+    u.rate = cfg.rate * (0.96 + Math.random()*0.08); u.pitch = cfg.pitch;
+    if(done){ let fired=false; const go=()=>{ if(!fired){ fired=true; done(); } }; u.onend = go; u.onerror = go; setTimeout(go, 1500 + text.length*90); }
+    speechSynthesis.speak(u); return true; }catch(e){ return false; }
+}
+
+/* ---------- Microphone (browser speech recognition, no credits) ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false, micBase = "", silenceTimer = null, lastFromMic = false, micBlocked = false;
+function micMsg(t){ $("micMsg").hidden = !t; $("micMsg").textContent = t || ""; }
+function setMicUI(){ const b=$("micBtn"); b.setAttribute("aria-pressed", String(listening)); $("micLbl").textContent = listening ? "Listening…" : "Talk"; b.setAttribute("aria-label", listening ? "Stop listening" : "Speak your line"); }
+function startMic(){
+  if(!SR || listening || micBlocked || $("input").disabled) return;
+  try{ speechSynthesis.cancel(); }catch(e){}
+  micMsg("");
+  rec = new SR(); rec.lang = "en-US"; rec.interimResults = true; rec.continuous = true;
+  micBase = $("input").value.trim() ? $("input").value.trim() + " " : "";
+  let finals = "";
+  rec.onresult = e => {
+    let interim = ""; finals = "";
+    for(let i=0;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) finals += r[0].transcript; else interim += r[0].transcript; }
+    $("input").value = (micBase + finals + interim).replace(/\s+/g," ").trimStart();
+    clearTimeout(silenceTimer);
+    if($("handsFree").checked) silenceTimer = setTimeout(()=>stopMic(false), 1800);
+  };
+  rec.onerror = e => {
+    if(e.error === "not-allowed" || e.error === "service-not-allowed"){ micBlocked = true; micMsg("The microphone is blocked here. Allow mic access in your browser, or use the deployed site in Chrome, Edge or Safari. You can still type."); }
+    else if(e.error === "no-speech") micMsg("Didn't hear anything. Tap Talk and try again.");
+    else if(e.error === "network") micMsg("Speech recognition needs an internet connection. You can still type.");
+    else if(e.error !== "aborted") micMsg("The mic stopped unexpectedly. Tap Talk to try again.");
+  };
+  rec.onend = () => {
+    clearTimeout(silenceTimer); const wasListening = listening; listening = false; setMicUI();
+    if(wasListening && rec && rec._autoSend !== false && $("handsFree").checked && $("input").value.trim() && !$("input").disabled){ lastFromMic = true; send(); }
+  };
+  try{ rec.start(); listening = true; setMicUI(); }catch(e){ micMsg("Couldn't start the mic. Tap Talk to try again."); }
+}
+function stopMic(cancel){ clearTimeout(silenceTimer); if(rec && listening){ rec._autoSend = !cancel; try{ cancel ? rec.abort() : rec.stop(); }catch(e){} } if(cancel){ listening = false; setMicUI(); } }
+function toggleMic(){
+  if(!SR || inClaude){ micMsg(NO_MIC_MSG); return; }
+  if(listening){ stopMic(false); if(!$("handsFree").checked){ /* manual mode: leave text for review */ } }
+  else { lastFromMic = true; startMic(); }
+}
+function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled) startMic(); }
+$("micBtn").onclick = toggleMic;
+document.addEventListener("keydown", e => { if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="m" && SR && status==="live"){ e.preventDefault(); toggleMic(); } });
+const inClaude = (()=>{ try{ return window.top !== window.self; }catch(e){ return true; } })();
+const NO_MIC_MSG = inClaude
+  ? "Voice doesn't work inside Claude. Open the downloaded index.html in Chrome or Edge to talk instead of type."
+  : "This browser can't turn speech into text. Open this page in Chrome, Edge or Safari to use the mic.";
+if(!SR || inClaude){ $("handsFree").disabled = true; $("handsFreeWrap").title = NO_MIC_MSG; }
+
+function startCall(){
+  st = newState(); turns = []; $("log").innerHTML = ""; $("score").hidden = true;
+  $("who").innerHTML = `<b>${esc(persona.name)}</b><div>${esc(persona.title)} · ${esc(persona.company)}</div>`;
+  setStatus("live","On call"); $("setup").hidden = true; $("startBtn").textContent = "New call"; $("endBtn").disabled = false;
+  addMsg("sys","Ring… ring… they picked up.");
+  const g = pick(persona.lines.pickup); /* greeting stays as written */ turns.push({who:"prospect",text:g}); addMsg("prospect", g); speak(g);
+  setInput(true); renderRoute(); $("input").focus();
+}
+function backToSetup(){ st = null; turns = []; setStatus("idle","Idle"); $("setup").hidden=false; $("endBtn").disabled=true; $("startBtn").textContent="Start call"; setInput(false); $("log").innerHTML=""; $("score").hidden=true; $("who").innerHTML='<b>No call yet</b><div>Pick a prospect and press Start call.</div>'; renderRoute(); }
+$("startBtn").onclick = ()=> status==="idle" ? startCall() : backToSetup();
+
+function send(){
+  const text = $("input").value.trim();
+  if(!text || typing || status!=="live") return;
+  stopMic(true); $("input").value = ""; turns.push({who:"rep",text}); addMsg("rep", text);
+  const r = prospectReply(text); r.text = withPersonality(r.text);
+  typing = true; setInput(false);
+  const bubble = addMsg("prospect","…");
+  const delay = window.__FAST ? 0 : 450 + Math.min(900, r.text.length*8);
+  setTimeout(()=>{
+    bubble.textContent = r.text; turns.push({who:"prospect",text:r.text}); typing = false;
+    const ongoing = !r.outcome;
+    if(r.outcome==="booked"){ setStatus("booked","Booked"); addMsg("sys","Meeting booked. End the call to see your score."); $("endBtn").textContent = "See my score"; }
+    else if(r.outcome==="ended"){ setStatus("ended","Hung up"); addMsg("sys","The prospect ended the call. End the call to see your score."); $("endBtn").textContent = "See my score"; }
+    else { setInput(true); $("input").focus(); }
+    if(!speak(r.text, ongoing ? listenAgain : null) && ongoing) listenAgain();
+    renderRoute();
+  }, delay);
+}
+$("sendBtn").onclick = ()=>{ lastFromMic = false; send(); };
+$("input").addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); lastFromMic = false; send(); } });
+
+function endCall(){
+  if(!st || st.repTurn===0){ backToSetup(); return; }
+  try{speechSynthesis.cancel()}catch(e){}
+  if(status==="live") setStatus("ended","Call ended");
+  setInput(false); $("endBtn").disabled = true; $("endBtn").textContent = "End call & score";
+  const s = scoreCall(), c = persona.card, sc = $("score");
+  sc.innerHTML = `
+    <div class="score-head"><div class="big">${s.total}<small>/100</small></div>
+      <div style="min-width:0;flex:1"><div class="eyebrow">${st.booked?"Meeting booked":"No meeting booked"} · ${esc(persona.name)} · ${esc({easy:"Warm",normal:"Normal",tough:"Tough"}[difficulty])}</div>
+      <p style="margin:6px 0 0">${esc(s.tips[0])}</p></div></div>
+    <div class="score-grid">
+      <div><div class="eyebrow">Route points</div><ul class="stage-list">${s.items.map(x=>`<li><span class="${x.pts===x.max?"ok":x.pts>0?"part":"no"}">${x.pts===x.max?"✓":x.pts>0?"–":"✗"}</span><span><b>${esc(x.label)}</b> <span class="pts">${x.pts}/${x.max}</span> — ${esc(x.note)}</span></li>`).join("")}${s.orderPenalty?`<li><span class="no">−</span><span><b>Order</b> <span class="pts">−${s.orderPenalty}</span> — Out of route order ${s.outOfOrder}×.</span></li>`:""}</ul></div>
+      <div><div class="eyebrow">Work on</div><ul class="plain">${s.tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
+      <div><div class="eyebrow">Prospect card (now revealed)</div><ul class="plain">
+        <li><b>AI today:</b> ${esc(c.aiUse)}</li><li><b>Hidden issue:</b> ${esc(c.issue)}</li><li><b>Looked into:</b> ${esc(c.looked)}</li><li><b>Prefers:</b> ${esc(c.pref)}</li></ul></div>
+    </div>
+    <div class="actions"><button class="btn primary" id="againBtn">Call again</button><button class="btn" id="otherBtn">Pick another prospect</button></div>`;
+  sc.hidden = false; sc.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"});
+  $("againBtn").onclick = startCall; $("otherBtn").onclick = backToSetup;
+}
+$("endBtn").onclick = endCall;
+
+renderPersonas(); renderRoute();
+</script>
+</body></html>
