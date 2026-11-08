@@ -860,7 +860,9 @@ async function to16k(chunks, inRate){
   return out;
 }
 // Cut the silence before and after the line: the speech model often returns nothing when a line starts after a long pause.
-function trimSpeech(x){
+// It also adds a second of silence at the end: without it the model drops the last words when you stop right on them.
+function trimSpeech(x){ const c = trimEdges(x), o = new Float32Array(c.length + 16000); o.set(c, 0); return o; }
+function trimEdges(x){
   const F = 320, n = Math.floor(x.length / F); if(n < 10) return x;
   const e = new Float32Array(n); for(let i = 0; i < n; i++){ let s = 0; for(let k = i*F; k < (i+1)*F; k++) s += x[k]*x[k]; e[i] = Math.sqrt(s / F); }
   const sorted = Array.from(e).sort((a,b)=>a-b), floor = sorted[Math.floor(n*0.1)], peak = sorted[Math.floor(n*0.98)];
