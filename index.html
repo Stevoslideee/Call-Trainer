@@ -705,7 +705,7 @@ async function wStart(){
     micMsg(e && e.name === "NotAllowedError" ? (IOS ? "Safari blocked the microphone. Tap \"aA\" in the address bar → Website Settings → Microphone → Allow, then tap Talk." : "The microphone is blocked. Allow it for this site (icon left of the address bar), then tap Talk.") : "Couldn't open the microphone. Tap Talk to try again, or use your keyboard's mic.");
     return;
   }
-  const chunks = [], rate = wCtx.sampleRate; let heard = false, lastLoud = 0; const t0 = performance.now();
+  const chunks = [], rate = wCtx.sampleRate; let heard = false, lastLoud = 0, noise = -1, frames = 0, speechStart = 0; const t0 = performance.now();
   wSrc = wCtx.createMediaStreamSource(wStream);
   wNode = wCtx.createScriptProcessor(4096, 1, 1);
   wNode.onaudioprocess = ev => {
@@ -713,14 +713,18 @@ async function wStart(){
     const d = ev.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d));
     let s = 0; for(let i = 0; i < d.length; i += 4) s += d[i] * d[i]; const rms = Math.sqrt(s / (d.length / 4));
     const now = performance.now(); const lv = $("micLevel"); if(lv) lv.firstChild.style.width = Math.min(100, Math.round(rms * 900)) + "%";
-    if(rms > 0.012){ heard = true; lastLoud = now; }
-    if($("handsFree").checked && heard && now - lastLoud > 1300) wFinish();
-    else if(!heard && now - t0 > 9000){ wFinish(); }
-    else if(now - t0 > 30000) wFinish();
+    frames++; if(frames <= 3) noise = noise < 0 ? rms : Math.min(noise, rms);
+    const thr = Math.max(0.012, noise * 2.2 + 0.004);
+    if(frames > 3 && rms > thr){ if(!heard) speechStart = now; heard = true; lastLoud = now; }
+    else if(frames > 3 && rms <= thr) noise = noise * 0.92 + rms * 0.08;
+    if($("handsFree").checked && heard && now - lastLoud > 1100) wFinish();
+    else if(!heard && now - t0 > 9000) wFinish();
+    else if(heard && now - speechStart > 25000) wFinish();
+    else if(now - t0 > 32000) wFinish();
   };
   wSrc.connect(wNode); wNode.connect(wCtx.destination);
   wRec = { chunks, rate, get heard(){ return heard; } };
-  wSetUI("rec"); micMsg("Listening… speak now.");
+  wSetUI("rec"); micMsg($("handsFree").checked ? "Listening… say your line, then pause. (Or tap Talk when you're done.)" : "Listening… tap Talk when you're done.");
 }
 async function wFinish(cancel){
   const r = wRec; if(!r) return; wRec = null; wRelease();
@@ -729,7 +733,8 @@ async function wFinish(cancel){
   wSetUI("busy"); micMsg("Turning your words into text…");
   try{
     const asr = await loadASR(p => micMsg(`Loading speech recognition: ${p}% (one-time download)`));
-    const out = await asr(resample16k(r.chunks, r.rate));
+    const slow = setTimeout(()=>micMsg("Still working… the first time can take a little longer."), 8000);
+    const out = await asr(resample16k(r.chunks, r.rate)); clearTimeout(slow);
     const text = String(out && out.text || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
     wSetUI("idle");
     if(!text){ micMsg("Didn't catch that. Tap Talk and try again."); return; }
