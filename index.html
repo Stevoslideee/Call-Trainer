@@ -673,7 +673,7 @@ function stopMic(cancel){ if(typeof wRec !== "undefined" && wRec){ wFinish(!!can
 /* ---------- Built-in speech-to-text (Whisper in the browser) — used on iPhone and wherever the browser's own mic is unreliable ---------- */
 const TFJ = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/transformers.min.js";
 let asrP = null, wCtx = null, wStream = null, wNode = null, wSrc = null, wRec = null, wForce = false;
-let asrFailed = false; function useWhisperMic(){ return !asrFailed || !SR; }
+let asrFailed = false, asrReady = false, wStarting = false; function useWhisperMic(){ return !asrFailed || !SR; }
 function loadASR(onProg){
   return asrP || (asrP = (async()=>{
     const T = await import(TFJ);
@@ -692,19 +692,23 @@ function resample16k(chunks, inRate){
   return out;
 }
 async function wStart(){
-  if(wRec || $("input").disabled) return;
+  if(wRec || wStarting || $("input").disabled) return;
   try{ speechSynthesis.cancel(); }catch(e){} stopNatural();
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ micMsg("This browser can't use the microphone. Use the mic on your keyboard, or type."); return; }
-  loadASR(p => { if(!wRec) micMsg(`Loading speech recognition: ${p}% (one-time download)`); }).catch(()=>{});
+  const ready = loadASR(p => micMsg(`Getting speech recognition ready: ${p}% (one-time download)`)); ready.catch(()=>{}); wStarting = true;
   try{
     if(!wCtx) wCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(wCtx.state === "suspended") await wCtx.resume();
     wStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   }catch(e){
-    wRelease(); wSetUI("idle");
+    wStarting = false; wRelease(); wSetUI("idle");
     micMsg(e && e.name === "NotAllowedError" ? (IOS ? "Safari blocked the microphone. Tap \"aA\" in the address bar → Website Settings → Microphone → Allow, then tap Talk." : "The microphone is blocked. Allow it for this site (icon left of the address bar), then tap Talk.") : "Couldn't open the microphone. Tap Talk to try again, or use your keyboard's mic.");
     return;
   }
+  if(!asrReady){ wSetUI("busy"); micMsg("Getting speech recognition ready…"); }
+  try{ await ready; asrReady = true; }catch(e){ wStarting = false; wRelease(); wSetUI("idle"); if(SR && !IOS){ asrFailed = true; micMsg("Built-in speech recognition couldn't load, so the browser's voice input is used instead. Tap Talk again."); } else micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type."); return; }
+  wStarting = false;
+  if($("input").disabled || status !== "live" || !wStream){ wRelease(); wSetUI("idle"); return; }
   const chunks = [], rate = wCtx.sampleRate; let heard = false, lastLoud = 0, noise = -1, frames = 0, speechStart = 0; const t0 = performance.now();
   wSrc = wCtx.createMediaStreamSource(wStream);
   wNode = wCtx.createScriptProcessor(4096, 1, 1);
