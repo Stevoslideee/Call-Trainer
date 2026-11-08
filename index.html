@@ -168,6 +168,9 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
 .miccheck.warn{border-color:var(--warn)}.miccheck.warn .mcmsg{color:var(--warn)}
 .miccheck.bad{border-color:var(--bad)}.miccheck.bad .mcmsg{color:var(--bad)}
 .miccheck.on .mcbar i{background:var(--teal)}
+@media (pointer:coarse){#input,.miccheck select,.f input{font-size:16px}label.chk{min-height:40px;align-items:center}}
+@media (max-width:760px){label.chk span{display:block}}
+@media (max-width:760px) and (max-height:720px){.mini:not([hidden]){max-height:20vh}.log{min-height:150px;max-height:38vh}}
 </style>
 </head>
 <body>
@@ -1232,7 +1235,9 @@ function startCall(){ unlockTTS(); if(useNatural()) piperLoad(persona.id).catch(
   if(mode === "drill"){ g = seedDrill(drillStep); addMsg("sys", `Drill: ${DRILL_STEPS[drillStep].map(id=>ROUTE.find(r=>r.id===id).label).join(" + ")}. The call is already under way. Pick up from here.`); }
   else { addMsg("sys","Ring… ring… they picked up."); g = pick(persona.lines.pickup); }
   turns.push({who:"prospect",text:g}); addMsg("prospect", g); speak(g); startTimer();
-  setInput(true); renderRoute(); $("input").focus();
+  setInput(true); renderRoute();
+  // Phones: don't pop the keyboard (most people talk); bring the conversation and the Talk button into view instead.
+  if(COARSE){ setTimeout(()=>{ const c = document.querySelector(".compose"); if(c) c.scrollIntoView({block:"end", behavior:"auto"}); scrollBy(0, 12); }, 60); } else $("input").focus();
 }
 function backToSetup(){ clearInterval(timerId); $("timer").hidden = true; st = null; turns = []; setStatus("idle","Idle"); $("setup").hidden=false; $("endBtn").disabled=true; $("startBtn").textContent="Start call"; setInput(false); $("log").innerHTML=""; $("score").hidden=true; $("who").innerHTML='<b>No call yet</b><div>Pick a prospect and press Start call.</div>'; renderRoute(); renderProgress(); }
 $("startBtn").onclick = ()=> status==="idle" ? startCall() : backToSetup();
