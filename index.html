@@ -678,7 +678,7 @@ function loadASR(onProg){
   return asrP || (asrP = (async()=>{
     const T = await import(TFJ);
     T.env.allowLocalModels = false;
-    return await T.pipeline("automatic-speech-recognition", "onnx-community/moonshine-tiny-ONNX", { dtype: "q8", device: "wasm",
+    return await T.pipeline("automatic-speech-recognition", "onnx-community/moonshine-base-ONNX", { dtype: "q8", device: "wasm",
       progress_callback: p => { if(onProg && p && p.status === "progress" && /onnx/.test(p.file || "")) onProg(Math.round(p.progress || 0)); } });
   })().catch(e=>{ asrP = null; throw e; }));
 }
@@ -690,6 +690,29 @@ function resample16k(chunks, inRate){
   const ratio = inRate / 16000, out = new Float32Array(Math.floor(all.length / ratio));
   for(let i = 0; i < out.length; i++){ const x = i * ratio, i0 = Math.floor(x), f = x - i0; out[i] = (all[i0] || 0) * (1 - f) + (all[i0 + 1] || 0) * f; }
   return out;
+}
+async function to16k(chunks, inRate){
+  let n = 0; chunks.forEach(c => n += c.length); const all = new Float32Array(n); let o = 0; chunks.forEach(c => { all.set(c, o); o += c.length; });
+  let out;
+  try{
+    const oc = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, Math.max(1, Math.ceil(all.length * 16000 / inRate)), 16000);
+    const b = oc.createBuffer(1, all.length, inRate); b.getChannelData(0).set(all);
+    const s = oc.createBufferSource(); s.buffer = b; s.connect(oc.destination); s.start();
+    out = (await oc.startRendering()).getChannelData(0);
+  }catch(e){ out = resample16k([all], inRate); }
+  let peak = 0; for(let i = 0; i < out.length; i++){ const v = Math.abs(out[i]); if(v > peak) peak = v; }
+  if(peak > 0.01 && peak < 0.5){ const g = Math.min(4, 0.7 / peak); for(let i = 0; i < out.length; i++) out[i] *= g; }
+  return out;
+}
+function fixTerms(t){
+  return t
+    .replace(/\b(re[\s:\-]?invent|reinvents?|re-?event|recollen and bent|rian vent|ree invent)\b/gi, "re:Invent")
+    .replace(/\b(a ?strap|ab ?stract|ab ?strat|abstrakt|abstract)\b(?=\s+(on|calling|here|with|and|we|team|is)\b|[,.]|$)/gi, "Abstrakt")
+    .replace(/\bfrom (a ?strap|ab ?stract|abstract|ab ?strat)\b/gi, "from Abstrakt")
+    .replace(/\bopen[\s\-]?a\.?\s?i\.?\b/gi, "OpenAI")
+    .replace(/\b(a\.?\s?w\.?\s?s\.?|a w s)\b/gi, "AWS")
+    .replace(/\bchat\s?g\.?\s?p\.?\s?t\.?\b/gi, "ChatGPT")
+    .replace(/\bA\.I\./g, "AI").replace(/\bA\.I\b/g, "AI");
 }
 async function wStart(){
   if(wRec || wStarting || $("input").disabled) return;
@@ -721,7 +744,7 @@ async function wStart(){
     const thr = Math.max(0.012, noise * 2.2 + 0.004);
     if(frames > 3 && rms > thr){ if(!heard) speechStart = now; heard = true; lastLoud = now; }
     else if(frames > 3 && rms <= thr) noise = noise * 0.92 + rms * 0.08;
-    if($("handsFree").checked && heard && now - lastLoud > 1100) wFinish();
+    if($("handsFree").checked && heard && now - lastLoud > 1600) wFinish();
     else if(!heard && now - t0 > 9000) wFinish();
     else if(heard && now - speechStart > 25000) wFinish();
     else if(now - t0 > 32000) wFinish();
@@ -738,8 +761,8 @@ async function wFinish(cancel){
   try{
     const asr = await loadASR(p => micMsg(`Loading speech recognition: ${p}% (one-time download)`));
     const slow = setTimeout(()=>micMsg("Still working… the first time can take a little longer."), 8000);
-    const out = await asr(resample16k(r.chunks, r.rate)); clearTimeout(slow);
-    const text = String(out && out.text || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    const out = await asr(await to16k(r.chunks, r.rate)); clearTimeout(slow);
+    const text = fixTerms(String(out && out.text || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\s+/g, " ").trim());
     wSetUI("idle");
     if(!text){ micMsg("Didn't catch that. Tap Talk and try again."); return; }
     micMsg("");
