@@ -154,6 +154,9 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
 .rv-text{color:var(--ink)}
 .chip{display:inline-block;font:500 11px/1 var(--f-mono);padding:4px 7px;border-radius:999px;background:var(--tint);color:var(--teal);margin-left:4px;letter-spacing:.04em}
 .chip.miss{color:var(--muted);background:var(--bg);border:1px dashed var(--line)}
+@keyframes tapme{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--teal) 45%,transparent)}50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--teal) 0%,transparent)}}
+.btn.mic.pulse{border-color:var(--teal);color:var(--teal);animation:tapme 1.1s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.btn.mic.pulse{animation:none;outline:2px solid var(--teal)}}
 </style>
 </head>
 <body>
@@ -869,18 +872,28 @@ async function wOpenStream(){
   wNode = wCtx.createScriptProcessor(4096, 1, 1); wNode.onaudioprocess = wProcess;
   wSrc.connect(wNode); wNode.connect(wCtx.destination);
 }
-async function wStart(){
-  if(wRec || wStarting) return;
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("timeout"), {name:"TimeoutError"})), ms))]);
+function wReset(){ wRec = null; wStarting = false; try{ wCloseAll(); }catch(e){} try{ if(wCtx) wCtx.close(); }catch(e){} wCtx = null; }
+function needTap(msg){ wSetUI("idle"); micMsg(msg || "Tap Talk to answer."); const b = $("micBtn"); b.classList.add("pulse"); clearTimeout(needTap.t); needTap.t = setTimeout(()=>b.classList.remove("pulse"), 8000); }
+async function wStart(fromTap){
+  if(wRec) return;
+  if(wStarting){ if(!fromTap) return; wReset(); }
   if($("input").disabled){ if(typing) micMsg("Let them finish answering, then tap Talk."); return; }
+  $("micBtn").classList.remove("pulse");
   try{ speechSynthesis.cancel(); }catch(e){} stopNatural();
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ micMsg("This browser can't use the microphone. Use the mic on your keyboard, or type."); return; }
   const ready = loadASR(p => micMsg(`Getting speech recognition ready: ${p}% (one-time download)`)); ready.catch(()=>{}); wStarting = true;
   try{
+    // A tap can always bring the audio system back, even if Safari paused it after the prospect spoke.
+    if(fromTap && wCtx && wCtx.state !== "running"){ try{ wCloseAll(); wCtx.close(); }catch(err){} wCtx = null; }
     if(!wCtx) wCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if(wCtx.state === "suspended") await wCtx.resume();
-    await wOpenStream();
+    if(wCtx.state !== "running"){ try{ await withTimeout(wCtx.resume(), 1200); }catch(err){} }
+    if(wCtx.state !== "running") throw Object.assign(new Error("audio paused"), {name:"PausedError"});
+    await withTimeout(wOpenStream(), 10000);
   }catch(e){
     wStarting = false; wCloseAll(); wSetUI("idle");
+    if(e && (e.name === "PausedError" || e.name === "TimeoutError")){ wReset(); needTap("Tap Talk to answer."); return; }
+    if(!fromTap && !(e && e.name === "NotAllowedError")){ needTap("Tap Talk to answer."); return; }
     micMsg(e && e.name === "NotAllowedError" ? (IOS ? "Safari blocked the microphone. Tap \"aA\" in the address bar \u2192 Website Settings \u2192 Microphone \u2192 Allow, then tap Talk." : "The microphone is blocked. Allow it for this site (icon left of the address bar), then tap Talk.") : "Couldn't open the microphone. Tap Talk to try again, or use your keyboard's mic.");
     return;
   }
@@ -890,6 +903,8 @@ async function wStart(){
   if($("input").disabled || status !== "live" || !wStream){ wRelease(); wSetUI("idle"); return; }
   wRec = { chunks: [], rate: wCtx.sampleRate, heard: false, lastLoud: 0, noise: -1, frames: 0, speechStart: 0, ring: [], loud: 0, maxRms: 0, t0: performance.now() };
   wSetUI("rec"); micMsg($("handsFree").checked ? "Listening\u2026 say your line, then pause. (Or tap Talk when you're done.)" : "Listening\u2026 tap Talk when you're done.");
+  // If no audio reaches us, don't sit there "listening" to nothing.
+  const myRec = wRec; setTimeout(()=>{ if(wRec === myRec && myRec.frames === 0){ wReset(); needTap("Tap Talk to answer."); } }, 1800);
 }
 async function wFinish(cancel){
   const r = wRec; if(!r) return; wRec = null; wRelease();
@@ -907,15 +922,31 @@ async function wFinish(cancel){
     micMsg("");
     const cur = $("input").value.trim(); $("input").value = cur ? cur + " " + text : text;
     if($("handsFree").checked && !$("input").disabled){ lastFromMic = true; send(); }
-  }catch(e){ wSetUI("idle"); if(SR && !IOS){ asrFailed = true; micMsg("Built-in speech recognition couldn't load, so the browser's voice input is used instead. Tap Talk again."); } else micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type."); }
+  }catch(e){
+    wSetUI("idle");
+    // A one-off transcription error shouldn't switch voice input for the rest of the session.
+    if(asrReady){ needTap("That line didn't come through. Tap Talk and say it again."); return; }
+    if(SR && !IOS){ asrFailed = true; micMsg("Built-in speech recognition couldn't load, so the browser's voice input is used instead. Tap Talk again."); } else micMsg("Speech recognition couldn't load on this device. Use the mic on your keyboard, or type.");
+  }
 }
-function wToggle(){ if(wRec) wFinish(false); else { lastFromMic = true; wStart(); } }
+function wToggle(){ if(wRec){ if(wRec.frames === 0){ wReset(); lastFromMic = true; wStart(true); } else wFinish(false); } else { lastFromMic = true; wStart(true); } }
 function toggleMic(){
   if(inClaude){ micMsg(NO_MIC_MSG); return; }
   if(useWhisperMic()){ wToggle(); return; }
   if(!SR){ micMsg(NO_MIC_MSG); return; }
   if(listening){ stopMic(false); if(!$("handsFree").checked){ /* manual mode: leave text for review */ } }
   else { lastFromMic = true; startMic(); }
+}
+function ensureRelisten(turn){
+  let tries = 0;
+  const tick = ()=>{
+    if(!st || st.repTurn !== turn || status !== "live" || !lastFromMic || !$("handsFree").checked || inClaude) return;
+    if(wRec || wStarting || listening) return;
+    const busy = typing || natActive || (natAudio && !natAudio.paused && !natAudio.ended) || (window.speechSynthesis && speechSynthesis.speaking);
+    if(!busy){ listenAgain(); return; }
+    if(++tries < 90) setTimeout(tick, 500);
+  };
+  setTimeout(tick, 2500);
 }
 function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled){ if(useWhisperMic()) setTimeout(()=>{ if(status === "live" && !$("input").disabled) wStart(); }, IOS ? 400 : 150); else startMic(); } }
 $("micBtn").onclick = ()=>{ unlockTTS(); toggleMic(); };
@@ -1002,8 +1033,9 @@ function playPcm(pcm, rate){
     a.play().catch(()=>{ micMsg("Tap Talk or Send once so your browser lets the prospect speak."); end(); });
   });
 }
+let natActive = 0;
 async function naturalSpeak(text, done){
-  const my = ++natGen, id = persona.id; let finished = false; const fin = ()=>{ if(!finished){ finished = true; if(my === natGen && done) done(); } };
+  const my = ++natGen, id = persona.id; natActive = my; let finished = false; const fin = ()=>{ if(natActive === my) natActive = 0; if(!finished){ finished = true; if(my === natGen && done) done(); } };
   try{ if(natAudio) natAudio.pause(); }catch(e){}
   const spoken = text.replace(/\u2014/g,", ").replace(/\.\.\.|\u2026/g,", ").replace(/([\w.]+)@([\w.]+)/g,(m,a,b)=>a.replace(/\./g," dot ")+" at "+b.replace(/\./g," dot "));
   const chunks = [];
@@ -1018,16 +1050,16 @@ async function naturalSpeak(text, done){
     for(let i = 0; i < chunks.length; i++){
       const { pcm, rate } = await next;
       if(i === 0){ clearTimeout(loading); if(shown) micMsg(""); }
-      if(my !== natGen) return;
+      if(my !== natGen){ if(natActive === my) natActive = 0; return; }
       next = i + 1 < chunks.length ? piperSynth(id, chunks[i+1]) : null;
       if(next) next.catch(()=>{});
       await playPcm(pcm, rate);
-      if(my !== natGen) return;
+      if(my !== natGen){ if(natActive === my) natActive = 0; return; }
     }
     fin();
   }catch(e){
     clearTimeout(loading);
-    if(my !== natGen) return;
+    if(my !== natGen){ if(natActive === my) natActive = 0; return; }
     natFailed = true; micMsg("The natural voice couldn't load on this device, so the device voice is used instead.");
     if(!speak(text, done)) fin();
   }
@@ -1076,6 +1108,7 @@ function send(){
     else { setInput(true); if(!COARSE) $("input").focus(); }
     if(ongoing && st.drill && !st.drillDone && DRILL_STEPS[st.drill].every(stepDone)){ st.drillDone = true; addMsg("sys", "Step done. Tap End call & score to see how you did, or keep going."); }
     if(!speak(r.text, ongoing ? listenAgain : null) && ongoing) listenAgain();
+    if(ongoing) ensureRelisten(st.repTurn);
     renderRoute();
   }, delay);
 }
@@ -1110,6 +1143,10 @@ function endCall(){
 }
 $("endBtn").onclick = endCall;
 
+// Surface unexpected errors instead of failing silently, and make sure the mic can always be restarted.
+function softRecover(){ try{ if(typing && Date.now() - (window.__typingAt||0) > 6000){ typing = false; } if(status === "live" && !typing){ setInput(true); } wStarting = false; }catch(e){} }
+window.addEventListener("error", e => { if(status === "live"){ softRecover(); micMsg("Something hiccuped. Tap Talk to keep going."); } });
+window.addEventListener("unhandledrejection", e => { if(status === "live" && !wRec){ softRecover(); } });
 setHint(); renderPersonas(); renderRoute(); renderProgress(); try{ fillVoicePick(); setTimeout(()=>{ loadVoices(); fillVoicePick(); }, 700); }catch(e){}
 </script>
 </body></html>
