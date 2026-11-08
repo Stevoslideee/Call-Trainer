@@ -161,6 +161,7 @@ label.chk{display:inline-flex;gap:8px;align-items:center;font-size:14px}
       </div>
       <label class="chk"><input type="checkbox" id="hideScript"> Hide script lines (practice from memory)</label>
       <label class="chk"><input type="checkbox" id="voice" checked> Prospects talk out loud <span style="color:var(--muted);font-size:12px">(iPhone: turn off silent mode and turn up the volume)</span></label>
+      <div class="row" style="gap:8px;align-items:flex-end"><label class="f" style="min-width:220px">Voice for this prospect (★ = natural-sounding)<select id="voicePick" style="border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:7px 9px;font-size:14px;color:var(--ink)"></select></label><button class="btn" id="voiceTest" type="button">Preview</button></div>
       <label class="chk" id="handsFreeWrap"><input type="checkbox" id="handsFree" checked> Hands-free mic (sends when you pause, then listens again)</label>
     </div>
     <details class="fields">
@@ -560,6 +561,7 @@ function scoreCall(){
 function renderPersonas(){
   $("personas").innerHTML = PERSONAS.map(p=>`<button class="persona" data-id="${p.id}" aria-pressed="${p===persona}"><span class="tag">${p.tag}</span><b>${esc(p.name)}</b><span>${esc(p.title)} · ${esc(p.company)}</span><span>${esc(p.blurb)}</span><span class="vtag">Voice: ${({dana:"bright and chatty",marcus:"low, slow, clipped",priya:"fast and hurried",tom:"calm and measured"})[p.id]}</span></button>`).join("");
   $("personas").querySelectorAll(".persona").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; persona = PERSONAS.find(p=>p.id===b.dataset.id); renderPersonas(); });
+  fillVoicePick();
 }
 $("diff").querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(status!=="idle") return; difficulty=b.dataset.v; $("diff").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x===b))); });
 
@@ -596,12 +598,17 @@ const VOICE = {
   tom:   {gender:"m", rate:.86, pitch:.95,  prefer:["Daniel","Ryan","Thomas","Christopher","Eric","Google UK English Male","David","Alex"],
           fillers:["Well, ","Hmm, ","You know, ","Let's see, "], chance:.4}
 };
-const FEMALE = /samantha|jenny|aria|zira|allison|ava|karen|moira|tessa|veena|libby|sonia|victoria|susan|female|fiona|serena|michelle|emma|olivia|natasha|hazel|catherine|kate|nicky/i;
-const MALE = /david|guy|alex|fred|daniel|mark|tom|ryan|thomas|christopher|eric|male|george|james|oliver|aaron|rishi|arthur|brian|andrew|roger/i;
+const FEMALE = /samantha|jenny|aria|zira|allison|ava|zoe|joelle|noelle|nora|ana\b|karen|moira|tessa|veena|libby|sonia|victoria|susan|female|fiona|serena|michelle|emma|olivia|natasha|hazel|catherine|kate|nicky/i;
+const MALE = /david|guy|alex|fred|daniel|mark|tom|ryan|thomas|christopher|eric|male|george|james|oliver|aaron|rishi|arthur|brian|andrew|roger|evan|nathan|steffan|davis|tony|jason/i;
 let voices = [];
 function loadVoices(){ try{ voices = speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang)); }catch(e){} }
-try{ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }catch(e){}
-function voiceFor(p){
+try{ loadVoices(); speechSynthesis.onvoiceschanged = ()=>{ loadVoices(); fillVoicePick(); }; }catch(e){}
+const VQ = v => (/natural|neural/i.test(v.name)?100:0) + (/online/i.test(v.name)?40:0) + (/premium/i.test(v.name)?90:0) + (/enhanced/i.test(v.name)?60:0) + (/google/i.test(v.name)?30:0) + (/en[-_]us/i.test(v.lang)?5:0) - (/compact|espeak|novelty|bells|bad news|bubbles|cellos|whisper|zarvox|trinoids|organ|boing|deranged|hysterical|jester|superstar|albert|bahh|wobble/i.test(v.name)?200:0);
+function genderOk(v, g){ return g==="f" ? FEMALE.test(v.name) && !/\bmale\b/i.test(v.name) : MALE.test(v.name) && !/female/i.test(v.name); }
+function voiceOverride(p){ try{ const n = localStorage.getItem("ct_voice_"+p.id); return n ? (voices.find(v=>v.name===n) || null) : null; }catch(e){ return null; } }
+function bestVoice(p){ const g = VOICE[p.id].gender; let pool = voices.filter(v=>genderOk(v,g) && VQ(v)>-100); if(!pool.length) pool = voices.filter(v=>VQ(v)>-100); if(!pool.length) return null; pool.sort((a,b)=>VQ(b)-VQ(a)); const good = pool.filter(v=>VQ(v) >= VQ(pool[0]) - 20); const same = PERSONAS.filter(x=>VOICE[x.id].gender===g); return good[same.indexOf(p) % good.length]; }
+function fillVoicePick(){ const sel = $("voicePick"); if(!sel) return; const cur = voiceFor(persona); const list = voices.slice().sort((a,b)=>VQ(b)-VQ(a)).filter(v=>VQ(v)>-100); sel.innerHTML = list.length ? list.map(v=>`<option value="${esc(v.name)}">${esc(v.name.replace(/^Microsoft |^Google /,"").replace(/ - English.*$/,""))}${VQ(v)>=60?" ★":""}</option>`).join("") : `<option>Default voice</option>`; if(cur) sel.value = cur.name; }
+function voiceFor(p){ if(!voices.length) loadVoices(); const o = voiceOverride(p); if(o) return o; const b = bestVoice(p); if(b) return b;
   const cfg = VOICE[p.id]; if(!voices.length) loadVoices();
   for(const name of cfg.prefer){ const v = voices.find(v=>v.name.toLowerCase().includes(name.toLowerCase())); if(v) return v; }
   const g = voices.filter(v=> cfg.gender==="f" ? FEMALE.test(v.name) && !/\bmale\b/i.test(v.name) : MALE.test(v.name) && !/female/i.test(v.name));
@@ -621,7 +628,7 @@ function speak(text, done){
     const spoken = text.replace(/—/g,", ").replace(/\.\.\.|…/g,", ").replace(/([\w.]+)@([\w.]+)/g,(m,a,b)=>a.replace(/\./g," dot ")+" at "+b.replace(/\./g," dot "));
     const u = new SpeechSynthesisUtterance(spoken);
     const v = voiceFor(persona); if(v){ u.voice = v; u.lang = v.lang; }
-    u.rate = cfg.rate * (0.96 + Math.random()*0.08); u.pitch = cfg.pitch;
+    const hq = v && VQ(v) >= 60; u.rate = (hq ? 1 + (cfg.rate-1)*0.6 : cfg.rate) * (0.97 + Math.random()*0.06); u.pitch = hq ? 1 + (cfg.pitch-1)*0.25 : 1 + (cfg.pitch-1)*0.6;
     if(done){ let fired=false; const go=()=>{ if(!fired){ fired=true; done(); } }; u.onend = go; u.onerror = go; setTimeout(go, 1500 + text.length*90); }
     setTimeout(()=>{ try{ speechSynthesis.resume(); speechSynthesis.speak(u); }catch(e){} }, 120); return true; }catch(e){ return false; }
 }
@@ -665,6 +672,8 @@ function toggleMic(){
 }
 function listenAgain(){ if($("handsFree").checked && lastFromMic && status === "live" && !$("input").disabled) startMic(); }
 $("micBtn").onclick = ()=>{ unlockTTS(); toggleMic(); };
+$("voicePick").onchange = e=>{ try{ localStorage.setItem("ct_voice_"+persona.id, e.target.value); }catch(err){} };
+$("voiceTest").onclick = ()=>{ unlockTTS(); const was = $("voice").checked; $("voice").checked = true; speak(pick(persona.lines.pickup) + " " + pick(persona.lines.aiUse)); $("voice").checked = was; };
 document.addEventListener("keydown", e => { if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="m" && SR && status==="live"){ e.preventDefault(); toggleMic(); } });
 const inClaude = (()=>{ try{ return window.top !== window.self; }catch(e){ return true; } })();
 const NO_MIC_MSG = inClaude
@@ -727,6 +736,6 @@ function endCall(){
 }
 $("endBtn").onclick = endCall;
 
-renderPersonas(); renderRoute();
+renderPersonas(); renderRoute(); try{ fillVoicePick(); setTimeout(()=>{ loadVoices(); fillVoicePick(); }, 700); }catch(e){}
 </script>
 </body></html>
